@@ -182,6 +182,8 @@ def get_sentiment_summary(ticker, lang=None):
         lex = keyword_lexicon(lang)
         pozitif_kelimeler = lex["positive"]
         negatif_kelimeler = lex["negative"]
+        _cat_general = "Genel Haber" if lang == "tr" else "General News"
+        _reason_kw = "Kelime bazlı analiz" if lang == "tr" else "Keyword-based analysis"
 
         for item in news:
             t_low = item['title'].lower()
@@ -212,8 +214,8 @@ def get_sentiment_summary(ticker, lang=None):
                 "score": score,
                 "weighted_score": round(weighted_score, 2),
                 "weight": round(weight, 2),
-                "category": "Genel Haber",
-                "reason": "Kelime bazlı analiz",
+                "category": _cat_general,
+                "reason": _reason_kw,
                 "date_str": date_str,
                 "days_old": days_old
             })

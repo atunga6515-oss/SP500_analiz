@@ -905,6 +905,12 @@ const VALUE_MAP: Record<string, string> = {
   "Normal": "Normal", "Veri Kısıtlı": "Limited Data", "Veri Yok": "No Data",
   "Kırılım 🔥": "Breakout 🔥", "-": "-",
   "Hata": "Error", "Veri Yetersiz": "Insufficient Data",
+  // Haber/sentiment kategorileri ve sebepleri
+  "Genel Haber": "General News", "Kelime bazlı analiz": "Keyword-based analysis", "Tarihsiz": "No date",
+  "Bilanço": "Earnings", "İş İlişkisi": "Business Relation", "İş/Sözleşme": "Business/Contract",
+  "Sermaye Artırımı": "Capital Increase", "Sermaye/Temettü": "Capital/Dividend",
+  "Geri Alım": "Buyback", "Geri Alım (Buyback)": "Buyback",
+  "Dava/Olumsuz Gelişme": "Litigation/Negative", "Diğer": "Other",
 };
 
 // Kısmi (substring) değişimler — birleşik/serbest metinler için (AlphaRank kanıtları, özetler).

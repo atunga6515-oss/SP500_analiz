@@ -3,10 +3,11 @@ import { useState } from "react";
 import api from "@/lib/api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import SymbolAutocomplete from "@/components/SymbolAutocomplete";
-import { useT } from "@/lib/i18n";
+import { useT, useTv } from "@/lib/i18n";
 
 export default function KapPage() {
     const t = useT();
+    const { tv } = useTv();
     const { requireAuth, AuthModal } = useRequireAuth();
     const [ticker, setTicker] = useState("");
     const [loading, setLoading] = useState(false);
@@ -96,9 +97,9 @@ export default function KapPage() {
                                     <td className="p-4 text-[var(--color-b-muted)]">{row.date_str || "-"}</td>
                                     <td className="p-4 text-white font-medium">
                                         <p>{row.title || "-"}</p>
-                                        <p className="text-xs text-[var(--color-b-muted)] mt-1">{row.reason || ""}</p>
+                                        <p className="text-xs text-[var(--color-b-muted)] mt-1">{tv(row.reason || "")}</p>
                                     </td>
-                                    <td className="p-4 text-center text-sm font-bold text-[#a5b1c2]">{row.category || "-"}</td>
+                                    <td className="p-4 text-center text-sm font-bold text-[#a5b1c2]">{tv(row.category || "-")}</td>
                                     <td className="p-4 text-center">
                                         <span className={`px-3 py-1 rounded text-sm font-bold ${
                                             row.score > 0.1 ? "text-[var(--color-b-green)] border border-[var(--color-b-green)]" : 
