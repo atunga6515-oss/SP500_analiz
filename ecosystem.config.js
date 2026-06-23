@@ -26,7 +26,7 @@ module.exports = {
       env: {
         // .env dosyası python-dotenv ile zaten okunur; gerekirse buradan da geçebilirsin
         PYTHONUNBUFFERED: "1",
-        PORT: "3005", // SP500 backend (FastAPI) portu
+        PORT: "8005", // SP500 backend (FastAPI) portu
       },
     },
     {
@@ -39,8 +39,8 @@ module.exports = {
       max_restarts: 10,
       env: {
         NODE_ENV: "production",
-        PORT: "8005", // SP500 frontend (Next.js) portu
-        BACKEND_INTERNAL_URL: "http://127.0.0.1:3005", // Next rewrite /api -> backend
+        PORT: "3005", // SP500 frontend (Next.js) portu
+        BACKEND_INTERNAL_URL: "http://127.0.0.1:8005", // Next rewrite /api -> backend
       },
     },
   ],

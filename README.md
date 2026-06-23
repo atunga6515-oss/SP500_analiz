@@ -55,7 +55,7 @@ Kök dizinde `.env` dosyası oluştur (`.env.example` dosyasını referans al). 
 ```env
 DATABASE_URL=sqlite:///borsa_v5.db
 JWT_SECRET_KEY=kendi_guclu_gizli_anahtariniz
-ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+ALLOWED_ORIGINS=http://localhost:3005,http://127.0.0.1:3005
 # Yapay zeka özellikleri için (opsiyonel):
 GEMINI_API_KEY=your_gemini_api_key
 # Varsayılan arayüz dili: en | tr
@@ -67,19 +67,20 @@ APP_DEFAULT_LANG=en
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python main.py                  # http://localhost:8000
+python main.py                  # http://localhost:8005 (backend)
 ```
 
 ### 4. Frontend
 ```bash
 cd frontend
 npm install
-npm run dev                     # http://localhost:3000
+npm run dev                     # http://localhost:3005 (frontend)
 ```
 
 `frontend/.env.local` içinde API adresi:
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8005
+BACKEND_INTERNAL_URL=http://127.0.0.1:8005
 ```
 
 ### 5. İlk admin kullanıcısı
@@ -123,7 +124,7 @@ SP500_analiz/
 
 ## 🖥️ Sunucu / Domain Dağıtımı (Linux + Apache + PM2)
 
-**Port mimarisi:** Backend (FastAPI) `3005`, Frontend (Next.js) `8005`. Tarayıcı `/api`'yi frontend'e çağırır; Next.js bunu otomatik olarak backend'e (`127.0.0.1:3005`) yönlendirir. **Apache yalnızca domain'i `127.0.0.1:8005`'e reverse-proxy etmelidir** — `/api` ayrıca proxy'lenmek zorunda değildir.
+**Port mimarisi:** Backend (FastAPI) `8005`, Frontend (Next.js) `3005`. Tarayıcı `/api`'yi frontend'e çağırır; Next.js bunu otomatik olarak backend'e (`127.0.0.1:8005`) yönlendirir. **Apache yalnızca domain'i `127.0.0.1:3005`'e reverse-proxy etmelidir** — `/api` ayrıca proxy'lenmek zorunda değildir.
 
 ### Adımlar (sunucuda)
 ```bash
@@ -153,7 +154,7 @@ pm2 save && pm2 startup
 ### Production `.env` (önemli ayarlar)
 ```env
 ENV=production                 # HTTPS arkasında: cookie Secure=True olur
-PORT=3005
+PORT=8005
 APP_DEFAULT_LANG=en
 JWT_SECRET_KEY=<openssl rand -hex 32>
 # PostgreSQL:
@@ -169,14 +170,14 @@ ALLOWED_ORIGINS=https://alanadiniz.com,https://www.alanadiniz.com
 `frontend/.env.local`:
 ```env
 NEXT_PUBLIC_API_URL=https://alanadiniz.com
-BACKEND_INTERNAL_URL=http://127.0.0.1:3005
+BACKEND_INTERNAL_URL=http://127.0.0.1:8005
 ```
 
 ### Örnek Apache reverse-proxy (VirtualHost)
 ```apache
 ProxyPreserveHost On
-ProxyPass        /  http://127.0.0.1:8005/
-ProxyPassReverse /  http://127.0.0.1:8005/
+ProxyPass        /  http://127.0.0.1:3005/
+ProxyPassReverse /  http://127.0.0.1:3005/
 ```
 
 ### Notlar

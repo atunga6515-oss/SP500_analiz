@@ -89,6 +89,6 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    # Port .env / ortam değişkeninden okunur (varsayılan 3005 — SP500 backend)
-    port = int(os.getenv("PORT", os.getenv("BACKEND_PORT", "3005")))
+    # Port .env / ortam değişkeninden okunur (varsayılan 8005 — SP500 backend)
+    port = int(os.getenv("PORT", os.getenv("BACKEND_PORT", "8005")))
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
-// Backend (FastAPI) iç adresi — SP500 backend portu 3005.
+// Backend (FastAPI) iç adresi — SP500 backend portu 8005.
 // Gerekirse BACKEND_INTERNAL_URL ortam değişkeniyle override edilebilir.
-const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL || "http://127.0.0.1:3005";
+const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL || "http://127.0.0.1:8005";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -38,7 +38,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",
-              "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005'),
+              "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'),
               "frame-ancestors 'none'",
             ].join('; '),
           },
