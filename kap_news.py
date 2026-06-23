@@ -95,26 +95,35 @@ def fetch_kap_news(ticker, lang=None):
     query = urllib.parse.quote(cfg["query_template"].format(ticker=ticker))
     url = f"https://news.google.com/rss/search?q={query}&hl={cfg['hl']}&gl={cfg['gl']}&ceid={cfg['ceid']}"
 
-    try:
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        
+    import ssl
+
+    def _fetch(context):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        resp = urllib.request.urlopen(req, timeout=10, context=context)
         xml_data = resp.read()
         root = ET.fromstring(xml_data)
-        
         items = []
         for item in root.findall('./channel/item')[:12]:
             items.append({
                 "title": item.find('title').text,
                 "link": item.find('link').text,
-                "date": item.find('pubDate').text
+                "date": item.find('pubDate').text,
             })
         return items
-    except:
+
+    # 1) Güvenli: TLS sertifikası DOĞRULANIR (varsayılan)
+    try:
+        return _fetch(ssl.create_default_context())
+    except ssl.SSLError:
+        # 2) Yalnızca sertifika sorununda doğrulamasız fallback (kurumsal proxy vb.)
+        try:
+            insecure = ssl.create_default_context()
+            insecure.check_hostname = False
+            insecure.verify_mode = ssl.CERT_NONE
+            return _fetch(insecure)
+        except Exception:
+            return []
+    except Exception:
         return []
 
 def get_sentiment_summary(ticker, lang=None):

@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import requests
-from bs4 import BeautifulSoup
 import time
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -309,8 +308,9 @@ def get_db_stats() -> dict:
                 db_size = conn.execute(text("SELECT pg_database_size(current_database())")).fetchone()[0]
                 db_size_mb = db_size / (1024 * 1024)
             else:
-                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bist_cache.db")
-                if os.path.exists(db_path):
+                # SQLite: aktif veritabanı dosyasının yolunu engine URL'inden al
+                db_path = engine.url.database
+                if db_path and os.path.exists(db_path):
                     db_size_mb = os.path.getsize(db_path) / (1024 * 1024)
                     
         return {
