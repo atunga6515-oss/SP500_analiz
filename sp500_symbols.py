@@ -336,5 +336,8 @@ def get_name(ticker: str) -> str:
 
 
 def get_symbols_with_names() -> list:
-    """[{symbol, name}] listesi döndürür (alfabetik)."""
-    return [{"symbol": s, "name": SP500_NAMES.get(s, s)} for s in sorted(SP500_ALL)]
+    """[{symbol, name, sector}] listesi döndürür (alfabetik)."""
+    return [
+        {"symbol": s, "name": SP500_NAMES.get(s, s), "sector": SP500_SECTORS.get(s, "")}
+        for s in sorted(SP500_ALL)
+    ]

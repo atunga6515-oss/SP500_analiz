@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createChart, ColorType, CandlestickSeries, LineStyle } from "lightweight-charts";
+import { useLangStore } from "@/lib/i18n";
 
 interface SMCChartData {
   time: string | number;
@@ -19,6 +20,7 @@ interface SMCChartProps {
 
 export default function SMCChart({ data, lastPeak, lastTrough }: SMCChartProps) {
     const chartContainerRef = useRef<HTMLDivElement>(null);
+    const lang = useLangStore((s) => s.lang);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -72,7 +74,7 @@ export default function SMCChart({ data, lastPeak, lastTrough }: SMCChartProps) 
                 lineWidth: 2,
                 lineStyle: LineStyle.Dashed,
                 axisLabelVisible: true,
-                title: 'BOS Kırılım Zirvesi',
+                title: lang === 'en' ? 'BOS Break Peak' : 'BOS Kırılım Zirvesi',
             });
         }
 

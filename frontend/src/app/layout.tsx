@@ -4,8 +4,8 @@ import NavBar from "./NavBar";
 import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
-    title: "AlfaBIST | Akıllı Borsa Analizi",
-    description: "Profesyonel Hisse Senedi Analiz Terminali",
+    title: "Alfa500 | S&P 500 Analysis Terminal",
+    description: "Professional S&P 500 stock analysis terminal",
 };
 
 export default function RootLayout({

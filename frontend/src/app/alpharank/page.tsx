@@ -2,10 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import SymbolAutocomplete from "@/components/SymbolAutocomplete";
-import { useT } from "@/lib/i18n";
+import { useT, useTv } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 export default function AlphaRankPage() {
     const t = useT();
+    const { tv } = useTv();
+    const sym = useSymbolNames();
     const [pool, setPool] = useState<any[]>([]);
     const [tickerInput, setTickerInput] = useState('');
     const [results, setResults] = useState<any[]>([]);
@@ -182,7 +185,7 @@ export default function AlphaRankPage() {
                         ) : (
                             pool.map((item) => (
                                 <div key={item.ticker} className="flex justify-between items-center bg-gray-700/50 p-3 rounded border border-gray-600">
-                                    <span className="font-bold text-white">{item.ticker.replace('.IS', '')}</span>
+                                    <span className="font-bold text-white">{item.ticker.replace('.IS', '')}{sym.nameOf(item.ticker.replace('.IS','')) ? ` — ${sym.nameOf(item.ticker.replace('.IS',''))}` : ""}</span>
                                     <button 
                                         onClick={() => handleRemove(item.ticker)}
                                         className="text-red-400 hover:text-red-300 text-sm hover:underline"
@@ -269,6 +272,9 @@ export default function AlphaRankPage() {
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <h3 className="text-2xl font-bold text-white">{res.ticker}</h3>
+                                            {sym.nameOf(res.ticker) && (
+                                                <p className="text-xs text-gray-400">{sym.nameOf(res.ticker)}{sym.sectorOf(res.ticker) ? ` · ${sym.sectorOf(res.ticker)}` : ""}</p>
+                                            )}
                                             <p className="text-gray-400 font-mono">{t("ar.price")}: ${res.price}</p>
                                         </div>
                                         <div className="flex flex-col items-end mr-6">
@@ -294,7 +300,7 @@ export default function AlphaRankPage() {
                                                 return (
                                                     <li key={idx} className="flex gap-3 text-sm text-gray-300 items-start">
                                                         <span className="mt-0.5">{icon}</span>
-                                                        <span>{ev}</span>
+                                                        <span>{tv(ev)}</span>
                                                     </li>
                                                 );
                                             })}

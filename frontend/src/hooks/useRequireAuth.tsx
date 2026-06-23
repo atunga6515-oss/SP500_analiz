@@ -2,9 +2,11 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 // ── Modal bileşeni ─────────────────────────────────────────────────────────
 function LoginRequiredModal({ onClose }: { onClose: () => void }) {
+    const t = useT();
     return (
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -23,10 +25,9 @@ function LoginRequiredModal({ onClose }: { onClose: () => void }) {
                     🔒
                 </div>
 
-                <h2 className="text-xl font-black text-white mb-2">Giriş Gerekli</h2>
+                <h2 className="text-xl font-black text-white mb-2">{t("authreq.title")}</h2>
                 <p className="text-[var(--color-b-muted)] text-sm mb-6 leading-relaxed">
-                    Bu özelliği kullanmak için hesabınıza giriş yapmanız gerekmektedir.
-                    Ücretsiz kayıt olabilirsiniz.
+                    {t("authreq.desc")}
                 </p>
 
                 <div className="flex flex-col gap-3">
@@ -34,13 +35,13 @@ function LoginRequiredModal({ onClose }: { onClose: () => void }) {
                         href="/login"
                         className="w-full py-3 bg-[var(--color-b-yellow)] text-[#181a20] font-bold rounded-lg hover:bg-[#f0c929] transition-colors text-sm shadow-lg shadow-[rgba(252,213,53,0.2)]"
                     >
-                        Giriş Yap →
+                        {t("authreq.login")}
                     </Link>
                     <Link
                         href="/register"
                         className="w-full py-3 bg-transparent border border-[var(--color-b-border)] text-[var(--color-b-muted)] font-medium rounded-lg hover:border-white/30 hover:text-white transition-colors text-sm"
                     >
-                        Hesap Oluştur
+                        {t("authreq.register")}
                     </Link>
                 </div>
             </div>

@@ -822,6 +822,41 @@ const DICT: Dict = {
   "aim.analyzing": { tr: "Piyasa koşulları ve indikatörler analiz ediliyor.", en: "Analyzing market conditions and indicators." },
   "aim.close": { tr: "Kapat", en: "Close" },
 
+  // LayeredChart (Pro Terminal) indikatör tooltip'leri
+  "lc.tip.autoTrend": { tr: "Grafikteki en son pivot tepe ve dip noktalarını birleştirerek mekanik destek/direnç hatları çizer.", en: "Draws mechanical support/resistance lines by connecting the latest pivot highs and lows." },
+  "lc.tip.supertrend": { tr: "Fiyat oynaklığını (ATR) baz alarak trend yönünü yeşil veya kırmızı bir takip çizgisiyle izler.", en: "Tracks trend direction with a green/red trailing line based on price volatility (ATR)." },
+  "lc.tip.alphaSignal": { tr: "9 ve 21 periyotluk hareketli ortalamaların momentum kesişimlerine göre onaylı giriş-çıkış sinyalleri üretir.", en: "Generates confirmed entry/exit signals from momentum crossovers of the 9 & 21 period moving averages." },
+  "lc.tip.smcFvg": { tr: "Kurumsal alıcıların geride bıraktığı yapısal adil değer boşluklarını ve dengesizlik alanlarını saptar.", en: "Detects structural Fair Value Gaps and imbalance zones left by institutional buyers." },
+  "lc.tip.squeeze": { tr: "Bollinger Bantları ile Keltner Kanalları arasındaki fiyat sıkışmasını ve patlama ivmesini ölçer.", en: "Measures price compression between Bollinger Bands and Keltner Channels, and the breakout momentum." },
+  "lc.tip.wavetrend": { tr: "Aşırı alım ve satım bölgelerindeki döngüsel dalga dönüşlerini hassas bir şekilde yakalar.", en: "Precisely captures cyclical wave reversals in overbought and oversold zones." },
+  "lc.tip.divergence": { tr: "Fiyat ile RSI osilatörü arasındaki uyumsuzlukları bularak erken trend dönüş uyarıları üretir.", en: "Finds divergences between price and the RSI oscillator to produce early trend-reversal alerts." },
+  "lc.tip.anchoredVwap": { tr: "Belirlenen kritik bir geçmiş dipten itibaren hacim ağırlıklı ortalama kurumsal maliyeti hesaplar.", en: "Computes the volume-weighted average institutional cost from a chosen critical historical low." },
+  "lc.tip.volProfilePoc": { tr: "Hissenin en yüksek işlem hacmine ulaştığı en güçlü fiyat seviyesini (POC) çizer.", en: "Draws the strongest price level (POC) where the stock traded the highest volume." },
+  "lc.tip.chandelier": { tr: "En yüksek fiyattan ATR kadar aşağıya dinamik stop yerleştirerek kârı ralli boyunca korur.", en: "Places a dynamic stop ATR-distance below the high to protect profits throughout a rally." },
+  "lc.tip.adxDmi": { tr: "Trendin yönünü ve alıcı/satıcıların gerçek gücünü ölçerek trendin başlayıp başlamayacağını gösterir.", en: "Measures trend direction and the real strength of buyers/sellers to gauge whether a trend can start." },
+  "lc.tip.stochRSI": { tr: "Klasik RSI'yı hızlandırarak dipten kalkış dalgalarını en erken aşamada yakalar.", en: "Speeds up classic RSI to catch bottom-reversal waves at the earliest stage." },
+  "lc.tip.cmf": { tr: "Fiyat yatay kalırken arkada kurumsal gizli toplama (para girişi) olup olmadığını süzer.", en: "Filters whether there is hidden institutional accumulation (money inflow) while price stays flat." },
+  "lc.tip.donchian": { tr: "Belirlenen periyottaki en yüksek zirve kırılımını saptayarak momentum rüzgarını arkana almanı sağlar.", en: "Detects the highest peak breakout over a set period so you can ride the momentum." },
+  "lc.tip.ichimoku": { tr: "Fiyatın Japon bulut yapısını (Kumo) yukarı yönlü kırarak dirençsiz alana geçişini yakalar.", en: "Captures price breaking up through the Japanese cloud (Kumo) into a resistance-free area." },
+  "lc.tip.bollinger": { tr: "Fiyatın standart sapma sınırlarını çizerek istatistiksel olarak aşırı hareket ettiği bölgeleri bulur.", en: "Draws price standard-deviation bands to find statistically over-extended zones." },
+
+  // Tablo başlık tooltip'leri (Seçki)
+  "tip.hybridScore": { tr: "Teknik + temel analizin harmanlandığı genel cazibe puanı (0-100); yüksek = daha güçlü fırsat.", en: "Overall attractiveness score blending technical + fundamental analysis (0-100); higher = stronger opportunity." },
+  "tip.confidence": { tr: "Sinyalin ne kadar sağlam/güvenilir olduğu (0-100); üst fitil, zayıf hacim ve ortalamadan aşırı uzaklık gibi risklerle düşer.", en: "How robust/reliable the signal is (0-100); drops with risks like upper wicks, weak volume and over-extension." },
+  "tip.weight": { tr: "Risk + güven bazlı önerilen portföy ağırlığı (maks %25). Güven arttıkça önerilen ağırlık artar.", en: "Risk + confidence based suggested portfolio weight (max 25%). Higher confidence → higher suggested weight." },
+  "tip.fundamental": { tr: "Şirketin değerleme görünümü (F/K, PD/DD, temettüye göre): Kelepir, Normal, Riskli gibi etiketler.", en: "Company valuation outlook (by P/E, P/B, dividend): labels like Bargain, Normal, Risky." },
+  "tip.decision": { tr: "Modelin nihai teknik kararı: Güçlü Al / Al / Nötr / Sat gibi durumlar.", en: "The model's final technical decision: Strong Buy / Buy / Neutral / Sell, etc." },
+  "tip.graham": { tr: "Graham formülüyle hesaplanan içsel (adil) değer; fiyat bunun altındaysa ucuz, üstündeyse pahalı sayılır.", en: "Intrinsic (fair) value via the Graham formula; below it = cheap, above it = expensive." },
+  "tip.signals": { tr: "Oluşan kesişim/formasyon sinyalleri: 🚩 Boğa Flaması, 🎯 MACD Altın Kesişim, 💎 RSI Pozitif Uyumsuzluk, 🔥 Dipten Dönüş. Üzerine gelince detay.", en: "Detected crossover/pattern signals: 🚩 Bull Flag, 🎯 MACD Golden Cross, 💎 RSI Positive Divergence, 🔥 Bottom Reversal. Hover for detail." },
+  "tip.stopLoss": { tr: "Stop-Loss: zarar-kes seviyesi (fiyat buraya düşerse pozisyondan çıkılması önerilir).", en: "Stop-Loss: exit level (if price falls here, closing the position is advised)." },
+
+  // Giriş gerekli modalı + SMC grafik etiketi
+  "authreq.title": { tr: "Giriş Gerekli", en: "Login Required" },
+  "authreq.desc": { tr: "Bu özelliği kullanmak için hesabınıza giriş yapmanız gerekmektedir. Ücretsiz kayıt olabilirsiniz.", en: "You need to log in to use this feature. You can register for free." },
+  "authreq.login": { tr: "Giriş Yap →", en: "Log in →" },
+  "authreq.register": { tr: "Hesap Oluştur", en: "Create Account" },
+  "smc.bosPeak": { tr: "BOS Kırılım Zirvesi", en: "BOS Break Peak" },
+
   // Ortak terimler (sayfalarda kademeli kullanım için)
   "common.loading": { tr: "Yükleniyor...", en: "Loading..." },
   "common.error": { tr: "Hata", en: "Error" },
@@ -872,17 +907,42 @@ const VALUE_MAP: Record<string, string> = {
   "Hata": "Error", "Veri Yetersiz": "Insufficient Data",
 };
 
-// Kısmi (substring) değişimler — bilinmeyen birleşik metinler için (örn. "10 (Güçlü)", sinyal satırları)
+// Kısmi (substring) değişimler — birleşik/serbest metinler için (AlphaRank kanıtları, özetler).
+// Sıra önemli: UZUN ifadeler önce gelmeli ki kısa kelimeler onları bozmasın.
 const PHRASE_MAP: [string, string][] = [
+  // AlphaRank kanıt cümleleri
+  ["Güçlü Kısa Vade Motoru", "Strong Short-Term Engine"],
+  ["Günlük indikatörlerin", "of the daily indicators,"],
+  ["AL sinyali veriyor", "signal BUY"],
+  ["Zayıf İvme", "Weak Momentum"],
+  ["Kısa vade indikatörlerin sadece", "only"],
+  ["AL veriyor", "signal BUY"],
+  ["Nötr İvme", "Neutral Momentum"],
+  ["ile karar aşamasında", "are undecided"],
+  ["Hacim Onayı", "Volume Confirmation"],
+  ["Son günlerde belirgin bir hacim girişi var", "Notable volume inflow in recent days"],
+  ["Mum Formasyonu", "Candle Pattern"],
+  ["tespit edildi", "detected"],
+  ["Dipten Dönüş Sinyali", "Bottom Reversal Signal"],
+  ["Hisse aşırı satım bölgesinden tepki veriyor", "Stock is bouncing from the oversold zone"],
+  ["Temel Analiz", "Fundamentals"],
+  ["Finansal olarak ucuz / kelepir bölgesinde", "Financially cheap / in bargain territory"],
+  ["Yüksek Tarihsel Güvenilirlik", "High Historical Reliability"],
+  ["Geçmiş testlerde başarı oranı", "Past-test success rate"],
+  ["Kısa vadeli osilatörler stabil ilerliyor", "Short-term oscillators are stable"],
+  // Genel ifadeler
   ["GÜÇLÜ AL", "STRONG BUY"], ["GÜÇLÜ SAT", "STRONG SELL"],
   ["Güçlü Al", "Strong Buy"], ["Güçlü Sat", "Strong Sell"],
   ["Boğa Flaması", "Bull Flag"], ["Altın Kesişim", "Golden Cross"],
   ["Pozitif Uyumsuzluk", "Positive Divergence"], ["Dipten Dönüş", "Bottom Reversal"],
   ["Bant Daralması", "Band Squeeze"], ["Aşırı Satım", "Oversold"], ["Aşırı Alım", "Overbought"],
   ["Trend Lideri", "Trend Leader"], ["Konsolidasyon", "Consolidation"],
+  ["Hacim girişi", "Volume inflow"], ["Hacim", "Volume"],
+  ["Kısa vade", "Short-term"], ["Orta vade", "Mid-term"], ["Uzun vade", "Long-term"],
+  ["İvme", "Momentum"], ["başarı oranı", "success rate"],
   ["Kırılım", "Breakout"], ["Güçlü", "Strong"], ["Zayıf", "Weak"],
   ["Yükseliş", "Uptrend"], ["Düşüş", "Downtrend"], ["Tepki", "Bounce"], ["Bekle", "Wait"],
-  ["Nötr", "Neutral"], ["NÖTR", "NEUTRAL"], ["Potansiyel", "Potential"],
+  ["Nötr", "Neutral"], ["NÖTR", "NEUTRAL"], ["Potansiyel", "Potential"], ["sinyali", "signal"],
 ];
 
 /** Backend'den gelen tekil değeri (karar, durum, etiket) seçili dile çevirir. */

@@ -349,12 +349,12 @@ export default function TopPicksPage() {
                                     <th className="p-4 border-b border-[var(--color-b-border)] font-semibold">{t("tp.colRank")}</th>
                                     <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('ticker')}>{t("tp.colStock")}{renderSortArrow('ticker')}</th>
                                     <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('fiyat')}>{t("tp.colPrice")}{renderSortArrow('fiyat')}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold text-center cursor-pointer hover:text-white" onClick={() => requestSort('kompozit_skor')}>{t("tp.colHybrid")}{renderSortArrow('kompozit_skor')}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('pgs')}>{t("tp.colConfidence")}{renderSortArrow('pgs')}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold text-center">{t("tp.colWeight")}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('temel_durum')}>{t("tp.colFundamental")}{renderSortArrow('temel_durum')}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('karar')}>{t("tp.colDecision")}{renderSortArrow('karar')}</th>
-                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white" onClick={() => requestSort('graham_value')}>{t("tp.colGraham")}{renderSortArrow('graham_value')}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold text-center cursor-pointer hover:text-white tip" data-tip={t("tip.hybridScore")} onClick={() => requestSort('kompozit_skor')}>{t("tp.colHybrid")}{renderSortArrow('kompozit_skor')}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white tip" data-tip={t("tip.confidence")} onClick={() => requestSort('pgs')}>{t("tp.colConfidence")}{renderSortArrow('pgs')}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold text-center tip" data-tip={t("tip.weight")}>{t("tp.colWeight")}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white tip" data-tip={t("tip.fundamental")} onClick={() => requestSort('temel_durum')}>{t("tp.colFundamental")}{renderSortArrow('temel_durum')}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white tip" data-tip={t("tip.decision")} onClick={() => requestSort('karar')}>{t("tp.colDecision")}{renderSortArrow('karar')}</th>
+                                    <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white tip" data-tip={t("tip.graham")} onClick={() => requestSort('graham_value')}>{t("tp.colGraham")}{renderSortArrow('graham_value')}</th>
                                     <th className="p-4 border-b border-[var(--color-b-border)] font-semibold text-center">{t("tp.colAction")}</th>
                                 </tr>
                             </thead>
@@ -390,7 +390,7 @@ export default function TopPicksPage() {
                                             {row.risk_position && row.risk_position.suggested_weight_pct > 0 ? (
                                                 <div>
                                                     <span className="font-bold text-cyan-400">%{row.risk_position.suggested_weight_pct.toFixed(1)}</span>
-                                                    <div className="text-[10px] text-[var(--color-b-muted)]">SL: ${Number(row.risk_position.stop_loss).toFixed(2)}</div>
+                                                    <div className="text-[10px] text-[var(--color-b-muted)] tip" data-tip={t("tip.stopLoss")}>SL: ${Number(row.risk_position.stop_loss).toFixed(2)}</div>
                                                 </div>
                                             ) : <span className="text-[var(--color-b-muted)]">-</span>}
                                         </td>

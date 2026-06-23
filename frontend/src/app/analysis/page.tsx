@@ -320,7 +320,7 @@ ${ssot.summary || "-"}`;
                                     <div className="bg-[#1e2329] p-5 rounded-lg border-l-4 border-[var(--color-b-yellow)] flex-shrink-0">
                             <h3 className="font-bold text-white mb-2">{t("an.aiSummary")}</h3>
                             <p className="text-[var(--color-b-muted)] text-sm leading-relaxed whitespace-pre-wrap">
-                                {data.ssot_result?.summary}
+                                {tv(data.ssot_result?.summary)}
                             </p>
                         </div>
 

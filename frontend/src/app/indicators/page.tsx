@@ -6,9 +6,11 @@ import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { getWatchlist, addTickerToWatchlist, removeTickerFromWatchlist } from "@/lib/watchlist";
 import { useT } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 export default function IndicatorsDashboard() {
     const t = useT();
+    const sym = useSymbolNames();
     const [watchlist, setWatchlist] = useState<string[]>([]);
     const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
     const [chartData, setChartData] = useState<any>(null);
@@ -178,10 +180,18 @@ export default function IndicatorsDashboard() {
                                 onClick={() => setSelectedTicker(ticker)}
                                 className={`flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-all ${selectedTicker === ticker ? 'bg-blue-600/20 border border-blue-500/50' : 'hover:bg-gray-800 border border-transparent'}`}
                             >
-                                <span className={`font-semibold ${selectedTicker === ticker ? 'text-blue-400' : 'text-gray-200'}`}>{ticker.replace('.IS', '')}</span>
-                                <button 
+                                <div className="flex flex-col min-w-0">
+                                    <span className={`font-semibold ${selectedTicker === ticker ? 'text-blue-400' : 'text-gray-200'}`}>{ticker.replace('.IS', '')}</span>
+                                    {sym.nameOf(ticker) && (
+                                        <span className="text-[11px] text-gray-400 truncate">{sym.nameOf(ticker)}</span>
+                                    )}
+                                    {sym.sectorOf(ticker) && (
+                                        <span className="text-[10px] text-gray-500 truncate">{sym.sectorOf(ticker)}</span>
+                                    )}
+                                </div>
+                                <button
                                     onClick={(e) => handleRemoveFromWatchlist(e, ticker)}
-                                    className="text-gray-500 hover:text-red-400 p-1"
+                                    className="text-gray-500 hover:text-red-400 p-1 shrink-0"
                                     title={t("ind.removeFromList")}
                                 >
                                     ✕
@@ -202,7 +212,12 @@ export default function IndicatorsDashboard() {
                         </span>
                     </div>
                     <div className="text-2xl font-bold text-white flex items-center gap-4">
-                        <span>{selectedTicker ? selectedTicker.replace('.IS', '') : t("ind.noSelection")}</span>
+                        <span className="flex flex-col leading-tight">
+                            <span>{selectedTicker ? selectedTicker.replace('.IS', '') : t("ind.noSelection")}</span>
+                            {selectedTicker && sym.nameOf(selectedTicker) && (
+                                <span className="text-xs font-normal text-gray-400">{sym.nameOf(selectedTicker)}{sym.sectorOf(selectedTicker) ? ` · ${sym.sectorOf(selectedTicker)}` : ""}</span>
+                            )}
+                        </span>
                         {chartData && chartData.quote && (
                             <div className="flex items-center gap-2 text-base font-medium bg-[#2b3139] px-3 py-1 rounded">
                                 <span className="text-gray-200">{chartData.quote.price.toFixed(2)}</span>

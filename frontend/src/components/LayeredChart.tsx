@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
+import { useT } from '@/lib/i18n';
 
 export type LayerKeys = 'autoTrend' | 'supertrend' | 'alphaSignal' | 'smcFvg' | 'squeeze' | 'wavetrend' | 'divergence' | 'anchoredVwap' | 'volProfilePoc' | 'chandelier' | 'adxDmi' | 'stochRSI' | 'cmf' | 'donchian' | 'ichimoku' | 'bollinger';
 
@@ -20,6 +21,7 @@ export interface LayeredChartProps {
 }
 
 export default function LayeredChart({ data, activeLayers, onToggleLayer }: LayeredChartProps) {
+  const t = useT();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -168,22 +170,22 @@ export default function LayeredChart({ data, activeLayers, onToggleLayer }: Laye
   return (
     <div className="w-full flex flex-col bg-[#1e2329] p-4 rounded-lg border border-gray-800">
       <div className="flex flex-wrap gap-2 mb-4 bg-[#181a20] p-2 rounded border border-gray-800">
-        {renderButton('autoTrend', '✍️ Auto Trend', 'bg-amber-600 border-amber-400', 'Grafikteki en son pivot tepe ve dip noktalarını birleştirerek mekanik destek/direnç hatları çizer.')}
-        {renderButton('supertrend', '📈 SuperTrend', 'bg-emerald-600 border-emerald-400', 'Fiyat oynaklığını (ATR) baz alarak trend yönünü yeşil veya kırmızı bir takip çizgisiyle izler.')}
-        {renderButton('alphaSignal', '✨ Alpha Signal', 'bg-purple-600 border-purple-400', '9 ve 21 periyotluk hareketli ortalamaların momentum kesişimlerine göre onaylı giriş-çıkış sinyalleri üretir.')}
-        {renderButton('smcFvg', '🔍 SMC (FVG)', 'bg-teal-600 border-teal-400', 'Kurumsal alıcıların geride bıraktığı yapısal adil değer boşluklarını ve dengesizlik alanlarını saptar.')}
-        {renderButton('squeeze', '📊 Squeeze Mom.', 'bg-rose-600 border-rose-400', 'Bollinger Bantları ile Keltner Kanalları arasındaki fiyat sıkışmasını ve patlama ivmesini ölçer.')}
-        {renderButton('wavetrend', '🌊 WaveTrend', 'bg-cyan-600 border-cyan-400', 'Aşırı alım ve satım bölgelerindeki döngüsel dalga dönüşlerini hassas bir şekilde yakalar.')}
-        {renderButton('divergence', '🔀 Divergence', 'bg-yellow-600 border-yellow-400', 'Fiyat ile RSI osilatörü arasındaki uyumsuzlukları bularak erken trend dönüş uyanışları üretir.')}
-        {renderButton('anchoredVwap', '⚓ Anchored VWAP', 'bg-blue-600 border-blue-400', 'Belirlenen kritik bir geçmiş dipten itibaren hacim ağırlıklı ortalama kurumsal maliyeti hesaplar.')}
-        {renderButton('volProfilePoc', '🧱 Vol. Profile POC', 'bg-orange-600 border-orange-400', 'Hissenin tüm zaman diliminde en yüksek işlem hacmine ulaştığı en güçlü takoz fiyat seviyesini çizer.')}
-        {renderButton('chandelier', '🪂 Chandelier Exit', 'bg-red-600 border-red-400', 'En yüksek fiyattan ATR kadar aşağıya dinamik stop yerleştirerek kârı ralli boyunca korur.')}
-        {renderButton('adxDmi', '📊 ADX & DMI', 'bg-neutral-600 border-neutral-400', 'Trendin yönünü, alıcı ve satıcıların gerçek savaş gücünün trendi başlatıp başlatamayacağını ölçer.')}
-        {renderButton('stochRSI', '⚡ Stoch RSI', 'bg-indigo-600 border-indigo-400', 'Klasik RSI indikatörünü hızlandırarak dipten kalkış dalgalarını en erken aşamada yakalar.')}
-        {renderButton('cmf', '💵 Chaikin CMF', 'bg-green-700 border-green-500', 'Hisse fiyatı yatay kalırken arkada kurumsal bir gizli toplama (para girişi) olup olmadığını süzgeçten geçirir.')}
-        {renderButton('donchian', '🧱 Donchian Channels', 'bg-violet-600 border-violet-400', 'Belirlenen periyottaki en yüksek zirve kırılımını saptayarak momentum rüzgarını arkana almanı sağlar.')}
-        {renderButton('ichimoku', '☁️ Ichimoku Kumo', 'bg-rose-700 border-rose-500', 'Fiyatın Japon bulut yapısını (Kumo) yukarı yönlü yırtarak dirençsiz alana geçişini yakalar.')}
-        {renderButton('bollinger', '🔘 Bollinger Bands', 'bg-sky-600 border-sky-400', 'Fiyatın standart sapma sınırlarını çizerek istatistiksel olarak aşırı sarsıldığı fiyat alanlarını bulur.')}
+        {renderButton('autoTrend', '✍️ Auto Trend', 'bg-amber-600 border-amber-400', t('lc.tip.autoTrend'))}
+        {renderButton('supertrend', '📈 SuperTrend', 'bg-emerald-600 border-emerald-400', t('lc.tip.supertrend'))}
+        {renderButton('alphaSignal', '✨ Alpha Signal', 'bg-purple-600 border-purple-400', t('lc.tip.alphaSignal'))}
+        {renderButton('smcFvg', '🔍 SMC (FVG)', 'bg-teal-600 border-teal-400', t('lc.tip.smcFvg'))}
+        {renderButton('squeeze', '📊 Squeeze Mom.', 'bg-rose-600 border-rose-400', t('lc.tip.squeeze'))}
+        {renderButton('wavetrend', '🌊 WaveTrend', 'bg-cyan-600 border-cyan-400', t('lc.tip.wavetrend'))}
+        {renderButton('divergence', '🔀 Divergence', 'bg-yellow-600 border-yellow-400', t('lc.tip.divergence'))}
+        {renderButton('anchoredVwap', '⚓ Anchored VWAP', 'bg-blue-600 border-blue-400', t('lc.tip.anchoredVwap'))}
+        {renderButton('volProfilePoc', '🧱 Vol. Profile POC', 'bg-orange-600 border-orange-400', t('lc.tip.volProfilePoc'))}
+        {renderButton('chandelier', '🪂 Chandelier Exit', 'bg-red-600 border-red-400', t('lc.tip.chandelier'))}
+        {renderButton('adxDmi', '📊 ADX & DMI', 'bg-neutral-600 border-neutral-400', t('lc.tip.adxDmi'))}
+        {renderButton('stochRSI', '⚡ Stoch RSI', 'bg-indigo-600 border-indigo-400', t('lc.tip.stochRSI'))}
+        {renderButton('cmf', '💵 Chaikin CMF', 'bg-green-700 border-green-500', t('lc.tip.cmf'))}
+        {renderButton('donchian', '🧱 Donchian Channels', 'bg-violet-600 border-violet-400', t('lc.tip.donchian'))}
+        {renderButton('ichimoku', '☁️ Ichimoku Kumo', 'bg-rose-700 border-rose-500', t('lc.tip.ichimoku'))}
+        {renderButton('bollinger', '🔘 Bollinger Bands', 'bg-sky-600 border-sky-400', t('lc.tip.bollinger'))}
       </div>
       <div ref={chartContainerRef} className="w-full h-[550px]" />
     </div>
