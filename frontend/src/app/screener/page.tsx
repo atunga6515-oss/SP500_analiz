@@ -1,0 +1,521 @@
+"use client";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import AIAnalyzeModal from "../components/AIAnalyzeModal";
+import toast from 'react-hot-toast';
+import { addTickerToWatchlist } from "@/lib/watchlist";
+import { useT, useTv } from "@/lib/i18n";
+
+export default function ScreenerPage() {
+    const router = useRouter();
+    const t = useT();
+    const { tv, tp } = useTv();
+    const { requireAuth, AuthModal } = useRequireAuth();
+    const [scanResults, setScanResults] = useState<any[]>([]);
+    const [scanning, setScanning] = useState(false);
+    const [scanProgress, setScanProgress] = useState(0);
+    const [scanText, setScanText] = useState("");
+    const [scanMode, setScanMode] = useState("BIST30");
+    const [sortConfig, setSortConfig] = useState<{key: string | null, direction: 'asc' | 'desc'}>({ key: null, direction: 'asc' });
+    const [strategyFilter, setStrategyFilter] = useState("ALL");
+    
+    // History State
+    const [historyList, setHistoryList] = useState<any[]>([]);
+    const [selectedHistoryId, setSelectedHistoryId] = useState<string>("");
+    // Interval ref - Memory leak'i önlemek için
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    
+    // AI Modal State
+    const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [aiProps, setAiProps] = useState<any>({ ticker: "", price: 0 });
+    
+    
+    // Portfolio Modal State
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTicker, setModalTicker] = useState("");
+    const [modalPrice, setModalPrice] = useState("");
+    const [modalQty, setModalQty] = useState("100");
+    
+    const fetchHistoryList = async () => {
+        try {
+            const res = await api.get('/screener/history');
+            if (res.data && res.data.data) {
+                setHistoryList(res.data.data);
+            }
+        } catch(e) {
+            console.error("Geçmiş çekilemedi", e);
+        }
+    };
+    
+    // İlk yüklemede history'yi çek (cookie-based auth, interceptor 401 yönetir)
+    useEffect(() => {
+        fetchHistoryList();
+        // Component unmount olduğunda aktif interval'i temizle
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, []);
+    
+    const loadHistoryDetails = async (id: string) => {
+        if (!id) return;
+        setScanning(true);
+        setScanText(t("sc.loadingHistory"));
+        try {
+            const res = await api.get(`/screener/history/${id}`);
+            if (res.data && res.data.data) {
+                setScanResults(res.data.data);
+            } else {
+                setScanResults([]);
+            }
+        } catch(e) {
+            console.error("Detay hatası:", e);
+        } finally {
+            setScanning(false);
+        }
+    };
+    
+    const runScan = async () => {
+        setScanning(true);
+        setScanProgress(0);
+        setScanText(t("sc.queued"));
+        setScanResults([]); // Clear previous results while scanning
+        try {
+            const res = await api.post('/screener/scan', {
+                scan_mode: scanMode
+            });
+            
+            if (res.data && res.data.task_id) {
+                const tid = res.data.task_id;
+                // Önceki interval varsa temizle
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                
+                intervalRef.current = setInterval(async () => {
+                    try {
+                        const statusRes = await api.get(`/screener/scan/progress/${tid}`);
+                        const sData = statusRes.data;
+                        
+                        if (sData.status === "completed") {
+                            if (intervalRef.current) clearInterval(intervalRef.current);
+                            setScanResults(sData.data || []);
+                            setScanning(false);
+                            setScanProgress(100);
+                            fetchHistoryList(); // Taramadan sonra listeyi yenile
+                        } else if (sData.status === "error") {
+                            if (intervalRef.current) clearInterval(intervalRef.current);
+                            console.error("Tarama hatası:", sData.text);
+                            setScanning(false);
+                            toast.error(t("sc.scanError") + sData.text);
+                        } else if (sData.status === "not_found") {
+                            if (intervalRef.current) clearInterval(intervalRef.current);
+                            setScanning(false);
+                        } else {
+                            setScanProgress(sData.progress || 0);
+                            setScanText(sData.text || "");
+                        }
+                    } catch (err) {
+                        console.error("Progress check error", err);
+                    }
+                }, 1000);
+            } else if (res.data && res.data.data) {
+                // Fallback for immediate response (if old backend happens)
+                setScanResults(res.data.data);
+                setScanning(false);
+            }
+        } catch (error) {
+            console.error("Tarama hatası:", error);
+            setScanning(false);
+        }
+    };
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key: string) => {
+        if (sortConfig.key !== key) return <span className="opacity-30 ml-1">↕</span>;
+        return sortConfig.direction === 'asc' ? <span className="text-[var(--color-b-yellow)] ml-1">▲</span> : <span className="text-[var(--color-b-yellow)] ml-1">▼</span>;
+    };
+
+    const filteredResults = [...scanResults].filter(row => {
+        if (strategyFilter === "BROKEN") {
+            return row["Düşen Kırılımı"] === "Kırılım 🔥" || row["Düzen Kırılımı"] === "Kırılım 🔥";
+        }
+        return true;
+    });
+
+    const sortedResults = [...filteredResults].sort((a, b) => {
+        if (sortConfig.key === null) return 0;
+        
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
+        if (sortConfig.key === 'Düşen Kırılımı') {
+            aVal = aVal || a["Düzen Kırılımı"] || "";
+            bVal = bVal || b["Düzen Kırılımı"] || "";
+        }
+        
+        if (aVal === undefined || aVal === null) aVal = "";
+        if (bVal === undefined || bVal === null) bVal = "";
+        
+        // Handle numeric sorting
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+
+        // Handle string sorting
+        const aStr = aVal.toString().toLowerCase();
+        const bStr = bVal.toString().toLowerCase();
+        if (aStr < bStr) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    }).filter(row => {
+        if (strategyFilter === "BROKEN") {
+            return row["Düşen Kırılımı"] === "Kırılım 🔥" || row["Düzen Kırılımı"] === "Kırılım 🔥";
+        }
+        return true;
+    });
+
+    const openModal = (ticker: string, price: string) => {
+        requireAuth(() => {
+            setModalTicker(ticker);
+            setModalPrice(price !== "-" ? parseFloat(price).toFixed(2) : "");
+            setModalQty("100");
+            setModalOpen(true);
+        });
+    };
+
+    const handleAddToAlphaRank = async (ticker: string) => {
+        requireAuth(async () => {
+            try {
+                const res = await api.post('/alpharank/pool/add', { ticker });
+                toast.success(res.data.message);
+            } catch (err: any) {
+                toast.error(err.response?.data?.detail || t("sc.alphaError"));
+            }
+        });
+    };
+
+    const handlePortfolioAdd = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await api.post('/portfolio/transaction', {
+                ticker: modalTicker,
+                type: 'ALIS',
+                quantity: parseFloat(modalQty),
+                price: parseFloat(modalPrice)
+            });
+            setModalOpen(false);
+            toast.success(t("sc.addedPortfolio").replace("{t}", modalTicker));
+        } catch(error) {
+            console.error("Portföy ekleme hatası:", error);
+            toast.error(t("sc.portfolioError"));
+        }
+    };
+    
+    const handleAIAnalysis = (row: any) => {
+        setAiProps({
+            ticker: row["Hisse"],
+            price: parseFloat(row["Fiyat"] || 0),
+            rsi: parseFloat(row["RSI"] || 0),
+            macd_signal: row["MACD_Signal"],
+            trend: row["Trend_Durumu"] || row["Piyasa Kararı"]
+        });
+        setAiModalOpen(true);
+    };
+
+    return (
+        <>
+        <div className="flex w-full h-full p-6 flex-col bg-[var(--color-b-bg)] text-[var(--color-b-text)] overflow-y-auto">
+            <div className="flex justify-between items-end mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-white mb-2">{t("sc.title")}</h1>
+                    <p className="text-[var(--color-b-muted)] mb-4">{t("sc.subtitle")}</p>
+
+                    <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded text-sm text-blue-200 mb-6 max-w-4xl">
+                        <strong>{t("sc.logicTitle")}</strong>{t("sc.logicBody")}
+                    </div>
+                    
+                    {scanning && (
+                        <div className="mt-4 flex items-center gap-3 bg-[var(--color-b-card)] p-3 rounded-lg border border-gray-800 shadow-md max-w-lg">
+                            <div className="text-[var(--color-b-yellow)] animate-spin">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <div className="flex-1 min-w-[250px]">
+                                <div className="text-sm font-medium mb-1.5 text-white">{tp(scanText) || t("sc.starting")}</div>
+                                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-[var(--color-b-yellow)] transition-all duration-300 ease-out"
+                                        style={{ width: `${scanProgress}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                            <div className="text-sm font-bold text-[var(--color-b-yellow)] ml-2">{Math.round(scanProgress)}%</div>
+                        </div>
+                    )}
+                    
+                    <div className="flex gap-4 mt-4 items-center flex-wrap">
+                        {["BIST30", "BIST100", "BIST_ALL"].map(mode => (
+                            <label key={mode} className="flex items-center gap-2 cursor-pointer text-sm">
+                                <input 
+                                    type="radio" 
+                                    name="scanMode" 
+                                    value={mode} 
+                                    checked={scanMode === mode}
+                                    onChange={() => setScanMode(mode)}
+                                    className="accent-[var(--color-b-yellow)]"
+                                    disabled={scanning}
+                                />
+                                {mode === "BIST30" ? t("sc.mode30") : mode === "BIST100" ? t("sc.mode100") : t("sc.modeAll")}
+                            </label>
+                        ))}
+                        
+                        {/* Stratejik Filtreler */}
+                        <div className="ml-4 flex items-center gap-2">
+                            <span className="text-sm text-gray-400">{t("sc.strategy")}</span>
+                            <select 
+                                className="bg-[var(--color-b-card)] border border-gray-700 text-white text-sm rounded px-3 py-1.5 focus:outline-none focus:border-[var(--color-b-yellow)]"
+                                value={strategyFilter}
+                                onChange={(e) => setStrategyFilter(e.target.value)}
+                            >
+                                <option value="ALL">{t("sc.all")}</option>
+                                <option value="BROKEN">{t("sc.brokenFalling")}</option>
+                            </select>
+                        </div>
+                        
+                        {/* Geçmiş Dropdown */}
+                        {historyList.length > 0 && (
+                            <div className="ml-auto flex items-center gap-2">
+                                <span className="text-sm text-gray-400">{t("sc.last30")}</span>
+                                <select 
+                                    className="bg-[var(--color-b-card)] border border-gray-700 text-white text-sm rounded px-3 py-1.5 focus:outline-none focus:border-[var(--color-b-yellow)]"
+                                    value={selectedHistoryId}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedHistoryId(val);
+                                        if (val) loadHistoryDetails(val);
+                                    }}
+                                >
+                                    <option value="">{t("sc.select")}</option>
+                                    {historyList.map(h => (
+                                        <option key={h.id} value={h.id}>
+                                            {h.run_date}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <button 
+                    onClick={() => requireAuth(runScan)} 
+                    disabled={scanning}
+                    className="px-6 py-3 bg-[var(--color-b-yellow)] text-black font-bold rounded hover:bg-yellow-500 transition-colors disabled:opacity-50 min-w-[200px]"
+                >
+                    {scanning ? t("sc.scanning") : t("sc.startScan")}
+                </button>
+            </div>
+
+            {/* Progress Bar Area */}
+            <div className="w-full h-2 bg-[#1e2329] rounded overflow-hidden mb-4 relative">
+                {scanning && (
+                    <div className="absolute top-0 left-0 h-full bg-[var(--color-b-yellow)] animate-pulse w-full"
+                         style={{
+                             backgroundImage: 'linear-gradient(90deg, rgba(252,213,53,0.1) 0%, rgba(252,213,53,1) 50%, rgba(252,213,53,0.1) 100%)',
+                             backgroundSize: '200% 100%',
+                             animation: 'progress-bar-stripes 1.5s linear infinite'
+                         }}
+                    ></div>
+                )}
+            </div>
+            
+            <div className="glass-panel flex-1 overflow-auto rounded-lg">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-[#1e2329] text-[var(--color-b-muted)] text-sm sticky top-0 z-10 shadow-md">
+                        <tr>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Hisse')}>
+                                {t("sc.colStock")} {getSortIndicator('Hisse')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Piyasa Kararı')}>
+                                {t("sc.colSignal")} {getSortIndicator('Piyasa Kararı')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Ensemble Güven Skoru')}>
+                                {t("sc.colTrendScore")} {getSortIndicator('Ensemble Güven Skoru')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Fiyat')}>
+                                {t("sc.colPrice")} {getSortIndicator('Fiyat')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Düşen Kırılımı')}>
+                                {t("sc.colBreak")} {getSortIndicator('Düşen Kırılımı')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Ara Hedef (₺)')}>
+                                {t("sc.colInterTarget")} {getSortIndicator('Ara Hedef (₺)')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold cursor-pointer hover:text-white select-none transition-colors" onClick={() => requestSort('Takas Değişimi (%)')}>
+                                {t("sc.colOwnership")} {getSortIndicator('Takas Değişimi (%)')}
+                            </th>
+                            <th className="p-4 border-b border-[var(--color-b-border)] font-semibold">{t("sc.colActions")}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {!scanning && scanResults.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center text-[var(--color-b-muted)]">
+                                    <div className="text-5xl mb-4">🔍</div>
+                                    {t("sc.emptyScan")}
+                                </td>
+                            </tr>
+                        ) : scanning && scanResults.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center text-[var(--color-b-yellow)]">
+                                    <div className="text-5xl mb-4 animate-spin">⏳</div>
+                                    {t("sc.scanningRows")}
+                                </td>
+                            </tr>
+                        ) : (
+                            sortedResults.map((row: any, i: number) => {
+                                const signal = row["Piyasa Kararı"] || "-";
+                                const price = row["Fiyat"] || "-";
+                                const rsi = row["RSI"] || "-";
+                                const score = row["Ensemble Güven Skoru"] || "-";
+                                return (
+                                <tr key={i} className="hover:bg-[#1e2329] transition-colors border-b border-[var(--color-b-border)]">
+                                    <td className="p-4 font-bold text-white text-lg">{row["Hisse"]}</td>
+                                    <td className="p-4 font-bold">
+                                        <span className={`px-3 py-1 rounded text-sm ${
+                                            signal.toLowerCase().includes("güçlü al") ? "bg-[var(--color-b-green)] text-black" :
+                                            signal.toLowerCase().includes("al") ? "text-[var(--color-b-green)] border border-[var(--color-b-green)]" :
+                                            signal.toLowerCase().includes("güçlü sat") ? "bg-[var(--color-b-red)] text-black" :
+                                            signal.toLowerCase().includes("sat") ? "text-[var(--color-b-red)] border border-[var(--color-b-red)]" :
+                                            "text-gray-400 border border-gray-600"
+                                        }`}>
+                                            {tv(signal)}
+                                        </span>
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm text-white">{t("sc.confScore")}: <span className="text-[var(--color-b-yellow)]">{score}</span></span>
+                                            <span className="text-sm text-white">RSI: {rsi}</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 font-medium text-white">{price}</td>
+                                    <td className="p-4 font-bold text-[var(--color-b-yellow)]">{tv(row["Düşen Kırılımı"] || row["Düzen Kırılımı"] || "-")}</td>
+                                    <td className="p-4 font-bold text-[var(--color-b-green)]">{row["Ara Hedef (₺)"] || "-"}</td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm text-white">{t("sc.ownership")}: %{row["Yabancı Oranı (%)"] !== undefined ? row["Yabancı Oranı (%)"] : "-"}</span>
+                                            <span className={`text-sm font-bold ${row["Takas Değişimi (%)"] > 0 ? "text-[var(--color-b-green)]" : row["Takas Değişimi (%)"] < 0 ? "text-[var(--color-b-red)]" : "text-[var(--color-b-muted)]"}`}>
+                                                {t("sc.ownershipChange")}: {row["Takas Değişimi (%)"] !== undefined ? (row["Takas Değişimi (%)"] > 0 ? "+" : "") + row["Takas Değişimi (%)"] + "%" : "-"}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => router.push(`/analysis?ticker=${row["Hisse"]}`)}
+                                                className="text-xs text-[var(--color-b-muted)] hover:text-[var(--color-b-yellow)] border border-[var(--color-b-muted)] hover:border-[var(--color-b-yellow)] px-3 py-1 rounded transition-colors"
+                                            >
+                                                {t("sc.inspect")}
+                                            </button>
+                                            <button 
+                                                onClick={() => openModal(row["Hisse"], row["Fiyat"])}
+                                                className="text-xs bg-[#1e2329] text-[var(--color-b-green)] hover:bg-[var(--color-b-green)] hover:text-black border border-[var(--color-b-green)] px-3 py-1 rounded transition-colors"
+                                            >
+                                                {t("sc.addPortfolio")}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleAddToAlphaRank(row["Hisse"])}
+                                                className="text-xs bg-[#1e2329] text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500 px-3 py-1 rounded transition-colors"
+                                            >
+                                                AlphaRank
+                                            </button>
+                                            <button 
+                                                onClick={() => addTickerToWatchlist(row["Hisse"])}
+                                                className="text-xs bg-[#1e2329] text-orange-400 hover:bg-orange-500 hover:text-white border border-orange-500 px-3 py-1 rounded transition-colors"
+                                            >
+                                                {t("sc.addWatch")}
+                                            </button>
+                                            <button 
+                                                onClick={() => requireAuth(() => handleAIAnalysis(row))}
+                                                className="text-xs flex items-center gap-1 bg-purple-900/20 text-purple-400 hover:bg-purple-600 hover:text-white border border-purple-700/50 px-3 py-1 rounded transition-colors font-bold"
+                                            >
+                                                <span>✨</span> {t("sc.aiAnalyze")}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )})
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Portfolio Add Modal */}
+            {modalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="bg-[#181a20] border border-[var(--color-b-border)] rounded-lg shadow-xl w-[400px] flex flex-col overflow-hidden">
+                        <div className="bg-[#1e2329] p-4 flex justify-between items-center border-b border-[var(--color-b-border)]">
+                            <h3 className="font-bold text-lg text-white">{t("sc.modalAddTitle")}{modalTicker}</h3>
+                            <button onClick={() => setModalOpen(false)} className="text-[var(--color-b-muted)] hover:text-white">✕</button>
+                        </div>
+                        <form onSubmit={handlePortfolioAdd} className="p-6 flex flex-col gap-4">
+                            <div>
+                                <label className="block text-sm text-[var(--color-b-muted)] mb-1">{t("sc.modalTicker")}</label>
+                                <input type="text" value={modalTicker} disabled className="w-full bg-[#2b3139] border border-[var(--color-b-border)] rounded p-2 text-white disabled:opacity-70" />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-[var(--color-b-muted)] mb-1">{t("sc.modalCost")}</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    required 
+                                    value={modalPrice} 
+                                    onChange={(e) => setModalPrice(e.target.value)}
+                                    className="w-full bg-[#181a20] border border-[var(--color-b-border)] focus:border-[var(--color-b-yellow)] focus:outline-none rounded p-2 text-white" 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-[var(--color-b-muted)] mb-1">{t("sc.modalQty")}</label>
+                                <input 
+                                    type="number" 
+                                    required 
+                                    min="1"
+                                    value={modalQty} 
+                                    onChange={(e) => setModalQty(e.target.value)}
+                                    className="w-full bg-[#181a20] border border-[var(--color-b-border)] focus:border-[var(--color-b-yellow)] focus:outline-none rounded p-2 text-white" 
+                                />
+                            </div>
+                            
+                            <div className="mt-4 flex gap-3">
+                                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 p-2 rounded border border-[var(--color-b-border)] hover:bg-[#2b3139] transition-colors">
+                                    {t("sc.cancel")}
+                                </button>
+                                <button type="submit" className="flex-1 p-2 rounded bg-[var(--color-b-yellow)] text-black font-bold hover:bg-yellow-500 transition-colors">
+                                    {t("sc.buySave")}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+        <AIAnalyzeModal 
+            isOpen={aiModalOpen}
+            onClose={() => setAiModalOpen(false)}
+            {...aiProps}
+        />
+        </div>
+        <AuthModal />
+        </>
+    );
+}

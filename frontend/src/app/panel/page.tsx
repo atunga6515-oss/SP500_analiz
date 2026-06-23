@@ -1,0 +1,635 @@
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import toast from 'react-hot-toast';
+import { useT } from "@/lib/i18n";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface UserRow {
+    username: string; email: string; phone: string; role: string;
+    is_active: boolean; last_active: string | null;
+    created_at: string | null; alarm_count: number;
+    ai_quota: number;
+    subscription_expires_at: string | null;
+}
+interface Session { username: string; role: string; last_active: string; }
+interface LogRow {
+    id: number; username: string; action: string;
+    details: string; level: string; created_at: string;
+}
+interface Stats {
+    total_users: number; active_users: number;
+    total_alarms: number; online_now: number; errors_today: number;
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
+    return (
+        <div className={`glass-panel p-5 rounded-xl border ${color} flex items-center gap-4`}>
+            <div className="text-3xl">{icon}</div>
+            <div>
+                <p className="text-2xl font-black text-white">{value}</p>
+                <p className="text-xs text-[var(--color-b-muted)] mt-0.5">{label}</p>
+            </div>
+        </div>
+    );
+}
+
+// ── Level Badge ───────────────────────────────────────────────────────────────
+const LEVEL_STYLES: Record<string, string> = {
+    INFO:    "bg-blue-900/50 text-blue-300 border-blue-700",
+    WARNING: "bg-yellow-900/50 text-yellow-300 border-yellow-700",
+    ERROR:   "bg-red-900/50 text-red-300 border-red-700",
+    DEBUG:   "bg-gray-800 text-gray-400 border-gray-600",
+};
+function LevelBadge({ level }: { level: string }) {
+    return (
+        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${LEVEL_STYLES[level] || LEVEL_STYLES.DEBUG}`}>
+            {level}
+        </span>
+    );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function AdminPage() {
+    const t = useT();
+    const router = useRouter();
+    const [tab, setTab] = useState<"users" | "sessions" | "logs">("users");
+    const [stats, setStats] = useState<Stats | null>(null);
+    const [users, setUsers] = useState<UserRow[]>([]);
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [logs, setLogs] = useState<LogRow[]>([]);
+    const [settings, setSettings] = useState<Record<string, string>>({
+        smtp_server: "smtp.gmail.com",
+        smtp_port: "587",
+        smtp_user: "",
+        smtp_password: "",
+        contact_email: "bilgi@borsaterminali.com"
+    });
+    const [logTotal, setLogTotal] = useState(0);
+    const [logPage, setLogPage] = useState(1);
+    const [logLevel, setLogLevel] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [updating, setUpdating] = useState<string | null>(null);
+    const [showAddUser, setShowAddUser] = useState(false);
+    const [newUsername, setNewUsername] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [newEmail, setNewEmail] = useState("");
+    const [newRole, setNewRole] = useState("user");
+    const [currentUser, setCurrentUser] = useState("");
+
+    // ── Access guard ───────────────────────────────────────────────────────────────────
+    useEffect(() => {
+        // Cookie-based auth: /auth/me API üzerinden gerçek rol doğrulaması
+        api.get('/auth/me')
+            .then(res => {
+                const role = res.data?.role;
+                const u = res.data?.username;
+                setCurrentUser(u || "");
+                if (role !== "admin") {
+                    router.push("/");
+                }
+            })
+            .catch(() => {
+                router.push("/login");
+            });
+    }, [router]);
+
+    // ── Data fetching ─────────────────────────────────────────────────────────
+    const fetchStats = useCallback(async () => {
+        try { setStats((await api.get("/admin/stats")).data); }
+        catch { /* sessizce geç */ }
+    }, []);
+
+    const fetchUsers = useCallback(async () => {
+        setLoading(true); setError("");
+        try { setUsers((await api.get("/admin/users")).data.users); }
+        catch (e: any) { setError(e?.response?.data?.detail || t("pn.usersLoadError")); }
+        finally { setLoading(false); }
+    }, []);
+
+    const fetchSessions = useCallback(async () => {
+        setLoading(true); setError("");
+        try { setSessions((await api.get("/admin/active-sessions")).data.active_sessions); }
+        catch (e: any) { setError(e?.response?.data?.detail || t("pn.sessionsLoadError")); }
+        finally { setLoading(false); }
+    }, []);
+
+    const fetchLogs = useCallback(async () => {
+        setLoading(true); setError("");
+        try {
+            const params = new URLSearchParams({ page: String(logPage), per_page: "50" });
+            if (logLevel) params.set("level", logLevel);
+            const res = await api.get(`/admin/logs?${params}`);
+            setLogs(res.data.logs);
+            setLogTotal(res.data.total);
+        }
+        catch (e: any) { setError(e?.response?.data?.detail || t("pn.logsLoadError")); }
+        finally { setLoading(false); }
+    }, [logPage, logLevel]);
+
+    const fetchSettings = useCallback(async () => {
+        setLoading(true); setError("");
+        try {
+            const res = await api.get("/admin/settings");
+            if (res.data?.settings) {
+                setSettings(prev => ({ ...prev, ...res.data.settings }));
+            }
+        }
+        catch (e: any) { setError(t("pn.settingsLoadError")); }
+        finally { setLoading(false); }
+    }, []);
+
+    const saveSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setUpdating("settings");
+        try {
+            await api.post("/admin/settings", { settings });
+            toast.success(t("pn.settingsSaved"));
+        } catch (e: any) {
+            toast.error(t("pn.settingsSaveError"));
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    useEffect(() => { fetchStats(); }, [fetchStats]);
+    useEffect(() => {
+        if (tab === "users") fetchUsers();
+        else if (tab === "sessions") fetchSessions();
+        else if (tab === "logs") fetchLogs();
+        else if (tab === "settings") fetchSettings();
+    }, [tab, fetchUsers, fetchSessions, fetchLogs, fetchSettings]);
+
+    // ── User actions ──────────────────────────────────────────────────────────
+    const toggleActive = async (username: string, current: boolean) => {
+        setUpdating(username);
+        try {
+            await api.put(`/admin/users/${username}/status`, { is_active: !current });
+            setUsers(prev => prev.map(u => u.username === username ? { ...u, is_active: !current } : u));
+        } catch (e: any) {
+            toast.error(e?.response?.data?.detail || t("pn.updateFail"));
+        } finally { setUpdating(null); }
+    };
+
+    const changeRole = async (username: string, newRole: string) => {
+        setUpdating(username);
+        try {
+            await api.put(`/admin/users/${username}/status`, { role: newRole });
+            setUsers(prev => prev.map(u => u.username === username ? { ...u, role: newRole } : u));
+        } catch (e: any) {
+            toast.error(e?.response?.data?.detail || t("pn.roleFail"));
+        } finally { setUpdating(null); }
+    };
+
+    const changeQuota = async (username: string, newQuota: number) => {
+        setUpdating(username);
+        try {
+            await api.put(`/admin/users/${username}/status`, { ai_quota: newQuota });
+            setUsers(prev => prev.map(u => u.username === username ? { ...u, ai_quota: newQuota } : u));
+        } catch (e: any) {
+            toast.error(e?.response?.data?.detail || t("pn.quotaFail"));
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const changeEmail = async (username: string, currentEmail: string) => {
+        const val = prompt(t("pn.promptEmail").replace("{u}", username), currentEmail || "");
+        if (val !== null) {
+            setUpdating(username);
+            try {
+                await api.put(`/admin/users/${username}/status`, { email: val });
+                setUsers(prev => prev.map(u => u.username === username ? { ...u, email: val } : u));
+            } catch (e: any) {
+                toast.error(e?.response?.data?.detail || t("pn.emailFail"));
+            } finally { setUpdating(null); }
+        }
+    };
+
+    const changePhone = async (username: string, currentPhone: string) => {
+        const val = prompt(t("pn.promptPhone").replace("{u}", username), currentPhone || "");
+        if (val !== null) {
+            setUpdating(username);
+            try {
+                await api.put(`/admin/users/${username}/status`, { phone: val });
+                setUsers(prev => prev.map(u => u.username === username ? { ...u, phone: val } : u));
+            } catch (e: any) {
+                toast.error(e?.response?.data?.detail || t("pn.phoneFail"));
+            } finally { setUpdating(null); }
+        }
+    };
+
+    const changePassword = async (username: string) => {
+        const val = prompt(t("pn.promptPw").replace("{u}", username));
+        if (val !== null && val.length >= 6) {
+            setUpdating(username);
+            try {
+                await api.put(`/admin/users/${username}/status`, { password: val });
+                toast.success(t("pn.pwSuccess"));
+            } catch (e: any) {
+                toast.error(e?.response?.data?.detail || t("pn.pwFail"));
+            } finally { setUpdating(null); }
+        } else if (val !== null) {
+            toast.error(t("pn.pwMin"));
+        }
+    };
+
+    const changeSubscription = async (username: string) => {
+        const val = prompt(t("pn.promptSub").replace("{u}", username));
+        if (val !== null && !isNaN(parseInt(val, 10))) {
+            setUpdating(username);
+            try {
+                await api.put(`/admin/users/${username}/subscription`, { add_days: parseInt(val, 10) });
+                toast.success(t("pn.subUpdated"));
+                fetchUsers();
+            } catch (e: any) {
+                toast.error(e?.response?.data?.detail || t("pn.subFail"));
+            } finally { setUpdating(null); }
+        }
+    };
+
+    const handleAddUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setUpdating("new");
+        try {
+            await api.post("/auth/register", { username: newUsername, password: newPassword, email: newEmail });
+            if (newRole === "admin") {
+                await api.put(`/admin/users/${newUsername}/status`, { role: "admin" });
+            }
+            setShowAddUser(false);
+            setNewUsername("");
+            setNewPassword("");
+            setNewEmail("");
+            setNewRole("user");
+            fetchUsers();
+            fetchStats();
+        } catch (e: any) {
+            toast.error(e?.response?.data?.detail || t("pn.userAddFail"));
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    return (
+        <div className="flex w-full h-full flex-col bg-[var(--color-b-bg)] text-[var(--color-b-text)] overflow-y-auto p-6">
+            {/* Header */}
+            <div className="mb-6">
+                <div className="flex items-center gap-3 mb-1">
+                    <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-xl">⚙️</div>
+                    <h1 className="text-3xl font-black text-white">{t("pn.title")}</h1>
+                    <span className="px-2 py-0.5 bg-purple-900/60 border border-purple-700 text-purple-300 rounded text-xs font-bold ml-2">ADMIN</span>
+                </div>
+                <p className="text-[var(--color-b-muted)] text-sm">{t("pn.subtitle")}</p>
+            </div>
+
+            {/* Stats */}
+            {stats && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                    <StatCard label={t("pn.statTotalUsers")}  value={stats.total_users}  icon="👥" color="border-blue-900" />
+                    <StatCard label={t("pn.statActive")}       value={stats.active_users} icon="✅" color="border-green-900" />
+                    <StatCard label={t("pn.statAlarms")}    value={stats.total_alarms} icon="🔔" color="border-yellow-900" />
+                    <StatCard label={t("pn.statOnline")}      value={stats.online_now}   icon="🟢" color="border-emerald-900" />
+                    <StatCard label={t("pn.statErrors")}        value={stats.errors_today} icon="🚨" color="border-red-900" />
+                </div>
+            )}
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-4 border-b border-[var(--color-b-border)] overflow-x-auto whitespace-nowrap pb-2">
+                {(["users", "sessions", "logs"] as const).map((t) => {
+                    const labels = { users: t("pn.tabUsers"), sessions: t("pn.tabSessions"), logs: t("pn.tabLogs") };
+                    return (
+                        <button
+                            key={t}
+                            onClick={() => setTab(t)}
+                            className={`px-5 py-2.5 text-sm font-semibold rounded-t transition-colors -mb-px border-b-2 ${
+                                tab === t
+                                    ? "border-purple-500 text-purple-300"
+                                    : "border-transparent text-[var(--color-b-muted)] hover:text-white"
+                            }`}
+                        >
+                            {labels[t]}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm mb-4">
+                    ⚠️ {error}
+                </div>
+            )}
+
+            {/* ── TAB: Kullanıcı Yönetimi ── */}
+            {tab === "users" && (
+                <div className="flex flex-col gap-4 flex-1">
+                    {/* Her admin kullanıcı ekleyebilir (backend zaten rolü kontrol ediyor) */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setShowAddUser(!showAddUser)}
+                            className="bg-[var(--color-b-yellow)] text-[#181a20] px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#f0c929] transition-colors"
+                        >
+                            {showAddUser ? t("pn.cancelAdd") : t("pn.addUser")}
+                        </button>
+                    </div>
+
+                    {showAddUser && (
+                        <form onSubmit={handleAddUser} className="glass-panel p-5 rounded-xl border border-[var(--color-b-border)] grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                            <div>
+                                <label className="block text-xs text-[var(--color-b-muted)] mb-1">{t("pn.fUsername")}</label>
+                                <input required value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full bg-[#1e2329] border border-[var(--color-b-border)] rounded px-3 py-2 text-sm text-white" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-b-muted)] mb-1">{t("pn.fPassword")}</label>
+                                <input required type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-[#1e2329] border border-[var(--color-b-border)] rounded px-3 py-2 text-sm text-white" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-b-muted)] mb-1">{t("pn.fEmailOpt")}</label>
+                                <input value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full bg-[#1e2329] border border-[var(--color-b-border)] rounded px-3 py-2 text-sm text-white" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-b-muted)] mb-1">{t("pn.fRole")}</label>
+                                <select value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full bg-[#1e2329] border border-[var(--color-b-border)] rounded px-3 py-2 text-sm text-white">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <button disabled={updating === "new"} type="submit" className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded px-4 text-sm transition-colors disabled:opacity-50">
+                                {updating === "new" ? t("pn.adding") : t("pn.add")}
+                            </button>
+                        </form>
+                    )}
+
+                <div className="glass-panel rounded-xl overflow-hidden flex-1">
+                    <table className="w-full text-left border-collapse text-sm">
+                        <thead className="bg-[#1e2329] text-[var(--color-b-muted)] sticky top-0">
+                            <tr>
+                                {[t("pn.colUser"), t("pn.colEmail"), t("pn.colPhone"), t("pn.colRole"), t("pn.colAlarms"), t("pn.colQuota"), t("pn.colSub"), t("pn.colLastActive"), t("pn.colStatus"), t("pn.colActions")].map(h => (
+                                    <th key={h} className="p-4 border-b border-[var(--color-b-border)] font-semibold">{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan={8} className="p-12 text-center text-[var(--color-b-muted)]">⏳ {t("common.loading")}</td></tr>
+                            ) : users.length === 0 ? (
+                                <tr><td colSpan={8} className="p-12 text-center text-[var(--color-b-muted)]">{t("pn.noUsers")}</td></tr>
+                            ) : users.map(u => (
+                                <tr key={u.username} className="hover:bg-[#1e2329] transition-colors border-b border-[var(--color-b-border)]">
+                                    <td className="p-4 font-bold text-white">{u.username}</td>
+                                    <td className="p-4 text-[var(--color-b-muted)]">{u.email || "—"}</td>
+                                    <td className="p-4 text-[var(--color-b-muted)]">{u.phone || "—"}</td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
+                                            u.role === "admin"
+                                                ? "bg-purple-900/50 text-purple-300 border-purple-700"
+                                                : "bg-gray-800 text-gray-400 border-gray-600"
+                                        }`}>
+                                            {u.role}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-[var(--color-b-yellow)] font-bold">{u.alarm_count}</td>
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[var(--color-b-yellow)] font-bold">{u.ai_quota ?? 0}</span>
+                                            {/* Tüm adminler kota düzenleyebilir */}
+                                            <div className="flex flex-col gap-0.5">
+                                                <button onClick={() => {
+                                                    const val = prompt(t("pn.promptQuota").replace("{u}", u.username), String(u.ai_quota ?? 0));
+                                                    if (val !== null && !isNaN(parseInt(val, 10))) {
+                                                        changeQuota(u.username, parseInt(val, 10));
+                                                    }
+                                                }} disabled={updating === u.username} className="text-[10px] bg-purple-900/50 hover:bg-purple-600 px-2 rounded disabled:opacity-50 text-white leading-none py-1 border border-purple-700">
+                                                    {t("pn.edit")}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-xs font-semibold">
+                                        {u.subscription_expires_at ? (() => {
+                                            const expDate = new Date(u.subscription_expires_at);
+                                            const today = new Date();
+                                            const diffTime = expDate.getTime() - today.getTime();
+                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                            
+                                            if (diffDays < 0) {
+                                                return <span className="text-red-500">{t("pn.expired")}</span>;
+                                            } else if (diffDays <= 3) {
+                                                return <span className="text-yellow-500">{t("pn.daysLeft").replace("{n}", String(diffDays))}</span>;
+                                            } else {
+                                                return <span className="text-green-500">{t("pn.daysLeft").replace("{n}", String(diffDays))}</span>;
+                                            }
+                                        })() : <span className="text-[var(--color-b-muted)]">—</span>}
+                                    </td>
+                                    <td className="p-4 text-[var(--color-b-muted)] text-xs">
+                                        {u.last_active ? new Date(u.last_active).toLocaleString("en-US") : "—"}
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                            u.is_active
+                                                ? "bg-green-900/50 text-green-400 border border-green-800"
+                                                : "bg-red-900/50 text-red-400 border border-red-800"
+                                        }`}>
+                                            {u.is_active ? t("pn.active") : t("pn.suspended")}
+                                        </span>
+                                    </td>
+                                    <td className="p-4">
+                                        {u.username !== currentUser ? (
+                                            <div className="flex gap-2 flex-wrap">
+                                                <button
+                                                    onClick={() => toggleActive(u.username, u.is_active)}
+                                                    disabled={updating === u.username}
+                                                    className={`text-xs px-3 py-1.5 rounded border transition-colors disabled:opacity-50 ${
+                                                        u.is_active
+                                                            ? "border-red-700 text-red-400 hover:bg-red-900/30"
+                                                            : "border-green-700 text-green-400 hover:bg-green-900/30"
+                                                    }`}
+                                                >
+                                                    {u.is_active ? t("pn.suspend") : t("pn.activate")}
+                                                </button>
+                                                <button
+                                                    onClick={() => changeRole(u.username, u.role === "admin" ? "user" : "admin")}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-purple-700 text-purple-400 hover:bg-purple-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {u.role === "admin" ? t("pn.makeUser") : t("pn.makeAdmin")}
+                                                </button>
+                                                <button
+                                                    onClick={() => changeEmail(u.username, u.email)}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-blue-700 text-blue-400 hover:bg-blue-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {t("pn.email")}
+                                                </button>
+                                                <button
+                                                    onClick={() => changePhone(u.username, u.phone)}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-indigo-700 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {t("pn.phone")}
+                                                </button>
+                                                <button
+                                                    onClick={() => changePassword(u.username)}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-orange-700 text-orange-400 hover:bg-orange-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {t("pn.password")}
+                                                </button>
+                                                <button
+                                                    onClick={() => changeSubscription(u.username)}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-pink-700 text-pink-400 hover:bg-pink-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {t("pn.extend")}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2 flex-wrap items-center">
+                                                <span className="text-[var(--color-b-muted)] text-xs italic">{t("pn.ownAccount")}</span>
+                                                <button
+                                                    onClick={() => changePassword(u.username)}
+                                                    disabled={updating === u.username}
+                                                    className="text-xs px-3 py-1.5 rounded border border-orange-700 text-orange-400 hover:bg-orange-900/30 transition-colors disabled:opacity-50"
+                                                >
+                                                    {t("pn.changePw")}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            )}
+
+            {/* ── TAB: Canlı Takip ── */}
+            {tab === "sessions" && (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm text-[var(--color-b-muted)]">{t("pn.sessionsDesc")}</p>
+                        <button onClick={fetchSessions} className="text-xs px-3 py-1.5 rounded border border-[var(--color-b-border)] text-[var(--color-b-muted)] hover:text-white hover:border-white/30 transition-colors">
+                            {t("pn.refresh")}
+                        </button>
+                    </div>
+                    {loading ? (
+                        <div className="glass-panel p-12 rounded-xl text-center text-[var(--color-b-muted)]">⏳ {t("common.loading")}</div>
+                    ) : sessions.length === 0 ? (
+                        <div className="glass-panel p-16 rounded-xl text-center">
+                            <div className="text-5xl mb-3">😴</div>
+                            <p className="text-white font-semibold">{t("pn.noSessionsTitle")}</p>
+                            <p className="text-[var(--color-b-muted)] text-sm mt-1">{t("pn.noSessionsDesc")}</p>
+                        </div>
+                    ) : sessions.map((s, i) => (
+                        <div key={i} className="glass-panel p-4 rounded-xl border border-[var(--color-b-border)] flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse"></div>
+                                <div>
+                                    <p className="font-bold text-white">{s.username}</p>
+                                    <p className="text-xs text-[var(--color-b-muted)]">
+                                        {t("pn.lastActivity")}: {new Date(s.last_active).toLocaleString("en-US")}
+                                    </p>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
+                                s.role === "admin"
+                                    ? "bg-purple-900/50 text-purple-300 border-purple-700"
+                                    : "bg-gray-800 text-gray-400 border-gray-600"
+                            }`}>
+                                {s.role}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* ── TAB: Sistem Logları ── */}
+            {tab === "logs" && (
+                <div className="flex flex-col flex-1 gap-3">
+                    {/* Filtreler */}
+                    <div className="flex gap-2 items-center flex-wrap">
+                        {(["", "INFO", "WARNING", "ERROR"] as const).map(lvl => (
+                            <button
+                                key={lvl || "all"}
+                                onClick={() => { setLogLevel(lvl); setLogPage(1); }}
+                                className={`text-xs px-3 py-1.5 rounded border font-bold transition-colors ${
+                                    logLevel === lvl
+                                        ? "border-[var(--color-b-yellow)] text-[var(--color-b-yellow)] bg-yellow-900/20"
+                                        : "border-[var(--color-b-border)] text-[var(--color-b-muted)] hover:text-white"
+                                }`}
+                            >
+                                {lvl || t("pn.allLevels")}
+                            </button>
+                        ))}
+                        <span className="text-xs text-[var(--color-b-muted)] ml-2">{t("pn.totalRecords").replace("{n}", String(logTotal))}</span>
+                    </div>
+
+                    <div className="glass-panel rounded-xl overflow-hidden flex-1 font-mono text-xs">
+                        <table className="w-full border-collapse">
+                            <thead className="bg-[#1e2329] text-[var(--color-b-muted)] sticky top-0">
+                                <tr>
+                                    {[t("pn.colTime"), t("pn.colLevel"), t("pn.colUser"), t("pn.colAction"), t("pn.colDetail")].map(h => (
+                                        <th key={h} className="p-3 border-b border-[var(--color-b-border)] text-left font-semibold">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr><td colSpan={5} className="p-12 text-center text-[var(--color-b-muted)]">⏳ {t("common.loading")}</td></tr>
+                                ) : logs.length === 0 ? (
+                                    <tr><td colSpan={5} className="p-12 text-center text-[var(--color-b-muted)]">{t("pn.noLogs")}</td></tr>
+                                ) : logs.map(log => (
+                                    <tr
+                                        key={log.id}
+                                        className={`border-b border-[var(--color-b-border)] transition-colors ${
+                                            log.level === "ERROR" ? "hover:bg-red-950/30" :
+                                            log.level === "WARNING" ? "hover:bg-yellow-950/30" :
+                                            "hover:bg-[#1e2329]"
+                                        }`}
+                                    >
+                                        <td className="p-3 text-[var(--color-b-muted)] whitespace-nowrap">
+                                            {log.created_at ? new Date(log.created_at).toLocaleString("en-US") : "—"}
+                                        </td>
+                                        <td className="p-3"><LevelBadge level={log.level} /></td>
+                                        <td className="p-3 text-white font-bold">{log.username}</td>
+                                        <td className="p-3 text-[var(--color-b-yellow)]">{log.action}</td>
+                                        <td className="p-3 text-[var(--color-b-muted)] max-w-xs truncate">{log.details || "—"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {logTotal > 50 && (
+                        <div className="flex justify-center gap-2 pt-2">
+                            <button
+                                onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                                disabled={logPage === 1}
+                                className="px-4 py-2 rounded border border-[var(--color-b-border)] text-sm text-[var(--color-b-muted)] hover:text-white disabled:opacity-40 transition-colors"
+                            >
+                                {t("pn.prev")}
+                            </button>
+                            <span className="px-4 py-2 text-sm text-[var(--color-b-muted)]">
+                                {t("pn.pageOf").replace("{a}", String(logPage)).replace("{b}", String(Math.ceil(logTotal / 50)))}
+                            </span>
+                            <button
+                                onClick={() => setLogPage(p => p + 1)}
+                                disabled={logPage * 50 >= logTotal}
+                                className="px-4 py-2 rounded border border-[var(--color-b-border)] text-sm text-[var(--color-b-muted)] hover:text-white disabled:opacity-40 transition-colors"
+                            >
+                                {t("pn.next")}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+
+        </div>
+    );
+}

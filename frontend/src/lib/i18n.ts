@@ -1,0 +1,928 @@
+"use client";
+/**
+ * i18n.ts — Frontend 2 dil (TR/EN) altyapısı  [Aşama 2]
+ * =====================================================
+ * Hafif, bağımlılıksız (zustand tabanlı) çeviri sistemi.
+ *
+ * Kullanım:
+ *   import { useT, useLang } from "@/lib/i18n";
+ *   const t = useT();
+ *   <span>{t("nav.markets")}</span>
+ *
+ * Dil değiştirme:
+ *   const { lang, setLang } = useLang();
+ *   setLang("en");
+ *
+ * Seçilen dil localStorage'da saklanır ve api.ts tarafından her isteğe
+ * otomatik ?lang= parametresi olarak eklenir (backend Aşama 1 ile uyumlu).
+ */
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export type Lang = "tr" | "en";
+
+export const SUPPORTED_LANGS: Lang[] = ["tr", "en"];
+// SP500 (ABD piyasası) uygulaması için varsayılan İngilizce.
+export const DEFAULT_LANG: Lang = "en";
+
+interface LangState {
+  lang: Lang;
+  setLang: (lang: Lang) => void;
+}
+
+export const useLangStore = create<LangState>()(
+  persist(
+    (set) => ({
+      lang: DEFAULT_LANG,
+      setLang: (lang) => set({ lang }),
+    }),
+    { name: "app-lang" }
+  )
+);
+
+/** React dışından (örn. axios interceptor) güncel dili okumak için. */
+export function getCurrentLang(): Lang {
+  try {
+    return useLangStore.getState().lang || DEFAULT_LANG;
+  } catch {
+    return DEFAULT_LANG;
+  }
+}
+
+/** Dil durumunu okuyup değiştirmek için hook. */
+export function useLang() {
+  const lang = useLangStore((s) => s.lang);
+  const setLang = useLangStore((s) => s.setLang);
+  return { lang, setLang };
+}
+
+// ============================================================
+// Çeviri sözlüğü
+// ============================================================
+type Dict = Record<string, { tr: string; en: string }>;
+
+const DICT: Dict = {
+  // Marka
+  "brand.suffix": { tr: "BIST", en: "500" },
+
+  // Navigasyon grupları
+  "nav.group.market": { tr: "Piyasa & Haberler", en: "Market & News" },
+  "nav.group.scan": { tr: "Tarama & Fırsatlar", en: "Screening & Opportunities" },
+  "nav.group.deep": { tr: "Derin Analiz & Test", en: "Deep Analysis & Testing" },
+  "nav.group.account": { tr: "Hesap Yönetimi", en: "Account" },
+
+  // Navigasyon linkleri (label)
+  "nav.markets": { tr: "Piyasalar", en: "Markets" },
+  "nav.heatmap": { tr: "Heatmap", en: "Heatmap" },
+  "nav.kap": { tr: "Haberler", en: "News" },
+  "nav.screener": { tr: "Screener", en: "Screener" },
+  "nav.topPicks15d": { tr: "Seçki 15G", en: "Picks 15D" },
+  "nav.topPicks": { tr: "Seçki O-U Vade", en: "Picks Mid-Long" },
+  "nav.alpharank": { tr: "AlphaRank", en: "AlphaRank" },
+  "nav.analysis": { tr: "Analiz", en: "Analysis" },
+  "nav.indicators": { tr: "Pro Terminal", en: "Pro Terminal" },
+  "nav.backtest": { tr: "Backtest", en: "Backtest" },
+  "nav.strategyCompare": { tr: "Kıyasla", en: "Compare" },
+  "nav.karne": { tr: "Sinyal Karnesi", en: "Signal Scorecard" },
+  "nav.robot": { tr: "Robot", en: "Robot" },
+  "nav.risk": { tr: "Risk", en: "Risk" },
+  "nav.smc": { tr: "SMC", en: "SMC" },
+  "nav.portfolio": { tr: "Portföy", en: "Portfolio" },
+  "nav.alarms": { tr: "Alarm", en: "Alerts" },
+
+  // Navigasyon tooltip'leri
+  "tip.markets": { tr: "Genel piyasa durumu, endeksler ve anlık takipler. Günlük özetleri inceleyin.", en: "Overall market state, indices and live tracking. Review daily summaries." },
+  "tip.heatmap": { tr: "Borsanın genel durumunu sektörlere göre ısı haritası üzerinden görselleştirin.", en: "Visualize the market by sector via a heatmap." },
+  "tip.kap": { tr: "Şirketlerin güncel haber ve bildirimlerini anlık takip edin.", en: "Track companies' latest news and disclosures in real time." },
+  "tip.screener": { tr: "Tüm S&P 500 hisselerini temel ve teknik kriterlere göre saniyeler içinde tarayın.", en: "Screen all S&P 500 stocks by fundamental and technical criteria in seconds." },
+  "tip.topPicks15d": { tr: "Sadece kısa vadeli (15 günlük) patlama potansiyeli arayan özel tarama motoru.", en: "A dedicated engine seeking only short-term (15-day) breakout potential." },
+  "tip.topPicks": { tr: "100+ teknik indikatörle analiz edilen orta ve uzun vadeli potansiyelli hisseleri görün.", en: "See mid/long-term candidates analyzed with 100+ technical indicators." },
+  "tip.alpharank": { tr: "Takip listenizdeki hisseleri 15 günlük yükseliş potansiyellerine göre sıralayın.", en: "Rank your watchlist by 15-day upside potential." },
+  "tip.analysis": { tr: "Bir hissenin teknik ve temel detaylarını derinlemesine inceleyin.", en: "Deep-dive into a stock's technical and fundamental details." },
+  "tip.indicators": { tr: "İzleme listenizdeki hisseleri gelişmiş teknik indikatörlerle grafik üzerinde inceleyin.", en: "Inspect watchlist stocks with advanced technical indicators on the chart." },
+  "tip.backtest": { tr: "Geçmiş verilere dayanarak indikatörlerin al-sat stratejilerini test edin.", en: "Test indicator buy/sell strategies against historical data." },
+  "tip.strategyCompare": { tr: "Farklı al-sat stratejilerinin geçmiş getiri performanslarını kıyaslayın.", en: "Compare historical returns of different buy/sell strategies." },
+  "tip.karne": { tr: "Üretilen Seçki 15G sinyallerinin 15 işlem günü sonraki gerçek isabet oranını ölçen model karnesi.", en: "A scorecard measuring the real hit rate of Picks-15D signals after 15 trading days." },
+  "tip.robot": { tr: "Otonom Al-Sat Robotu (Paper Trading) ile stratejinizi test edin.", en: "Test your strategy with the autonomous trading robot (paper trading)." },
+  "tip.risk": { tr: "Portföyünüzün ve piyasanın risk durumunu, volatilite oranlarını analiz edin.", en: "Analyze portfolio and market risk, and volatility levels." },
+  "tip.smc": { tr: "Akıllı Para Konseptleri (SMC) ile market yapısı kırılımlarını (BOS) ve likidite seviyelerini inceleyin.", en: "Examine market structure breaks (BOS) and liquidity with Smart Money Concepts." },
+  "tip.portfolio": { tr: "Sanal portföyünüzü oluşturun, işlemlerinizi kaydedin. Kâr/zarar durumunuzu takip edin.", en: "Build a virtual portfolio, log trades, and track P/L." },
+  "tip.alarms": { tr: "Fiyat veya teknik indikatör hedefleri belirleyin. Gerçekleştiğinde bildirim alın.", en: "Set price or indicator targets and get notified when they trigger." },
+
+  // NavBar aksiyonları
+  "navbar.admin": { tr: "Admin", en: "Admin" },
+  "navbar.adminPanel": { tr: "Admin Paneli", en: "Admin Panel" },
+  "navbar.logout": { tr: "Çıkış", en: "Log out" },
+  "navbar.login": { tr: "Giriş Yap", en: "Log in" },
+  "navbar.aiCredits": { tr: "Yapay Zeka Analiz Krediniz", en: "Your AI analysis credits" },
+  "navbar.language": { tr: "Dil", en: "Language" },
+
+  // Auth (login / register)
+  "auth.brand": { tr: "Borsa Terminal", en: "Market Terminal" },
+  "auth.subtitle": { tr: "Profesyonel Borsa Analiz Platformu", en: "Professional Market Analysis Platform" },
+  "auth.copyright": { tr: "Borsa Terminali V5 · Tüm hakları saklıdır.", en: "Market Terminal V5 · All rights reserved." },
+  "auth.membership": { tr: "Üyelik İşlemleri", en: "Membership" },
+  "auth.closedNetwork": { tr: "Borsa Analiz Terminali, kapalı devre çalışan profesyonel bir analiz platformudur. Dışarıdan otomatik kayıt alımı şu an için aktif değildir.", en: "The Market Analysis Terminal is a closed, professional analysis platform. Automatic public sign-up is not currently active." },
+  "auth.plansTitle": { tr: "Abonelik Paketleri ve Özellikleri", en: "Subscription Plans & Features" },
+  "auth.plansSoon": { tr: "Çok yakında bu sayfa üzerinden platformun özelliklerini, abonelik paketlerimizi ve ücretlendirmeleri inceleyebileceksiniz.", en: "Very soon you'll be able to review the platform's features, subscription plans and pricing on this page." },
+  "auth.contactPrompt": { tr: "Kayıt ve İletişim İçin E-Posta Gönderin:", en: "Email us to register or get in touch:" },
+  "auth.haveAccount": { tr: "Zaten hesabınız var mı?", en: "Already have an account?" },
+  "auth.username": { tr: "Kullanıcı Adı", en: "Username" },
+  "auth.password": { tr: "Şifre", en: "Password" },
+  "auth.loginCta": { tr: "Giriş Yap", en: "Log in" },
+  "auth.loggingIn": { tr: "Giriş yapılıyor...", en: "Logging in..." },
+  "auth.noAccount": { tr: "Hesabınız yok mu?", en: "Don't have an account?" },
+  "auth.register": { tr: "Kayıt Ol", en: "Sign up" },
+  "auth.sessionExpired": { tr: "Oturum süreniz doldu, lütfen tekrar giriş yapın.", en: "Your session has expired, please log in again." },
+  "auth.loginError": { tr: "Kullanıcı adı veya şifre hatalı.", en: "Incorrect username or password." },
+  "auth.fillFields": { tr: "Lütfen tüm alanları doldurun.", en: "Please fill in all fields." },
+  "auth.subtitleStock": { tr: "Profesyonel Hisse Senedi Analiz Platformu", en: "Professional Stock Analysis Platform" },
+  "auth.loginTitle": { tr: "Giriş Yap", en: "Log in" },
+  "auth.loginSubtitle": { tr: "Hesabınıza erişin", en: "Access your account" },
+  "auth.loginArrow": { tr: "Giriş Yap →", en: "Log in →" },
+  "auth.emptyFields": { tr: "Kullanıcı adı ve şifre boş bırakılamaz.", en: "Username and password cannot be empty." },
+  "auth.registered": { tr: "✅ Hesabınız oluşturuldu. Lütfen giriş yapın.", en: "✅ Your account has been created. Please log in." },
+  "auth.testFeatures": { tr: "🚀 Özellikleri test etmek için lütfen sisteme giriş yapın.", en: "🚀 Please log in to test the features." },
+  "auth.contactAdminLink": { tr: "Sisteme kayıt olmak için yöneticinizle iletişime geçin.", en: "Contact your administrator to register." },
+  "auth.copyrightShort": { tr: "AlfaBIST · Tüm hakları saklıdır.", en: "Alfa500 · All rights reserved." },
+  "auth.brandShort": { tr: "AlfaBIST", en: "Alfa500" },
+  // İletişim modalı
+  "contact.title": { tr: "Yöneticiyle İletişime Geçin", en: "Contact the Administrator" },
+  "contact.desc": { tr: "Sisteme kayıt olmak veya demo talebinde bulunmak için aşağıdaki formu doldurabilirsiniz.", en: "Fill out the form below to register or request a demo." },
+  "contact.name": { tr: "Adınız Soyadınız", en: "Full Name" },
+  "contact.namePh": { tr: "Örn: Ahmet Yılmaz", en: "e.g. John Smith" },
+  "contact.email": { tr: "E-posta Adresiniz", en: "Your Email Address" },
+  "contact.emailPh": { tr: "Örn: ahmet@sirket.com", en: "e.g. john@company.com" },
+  "contact.message": { tr: "Mesajınız", en: "Your Message" },
+  "contact.messagePh": { tr: "Kayıt olmak istiyorum...", en: "I'd like to register..." },
+  "contact.send": { tr: "Mesajı Gönder", en: "Send Message" },
+  "contact.sending": { tr: "Gönderiliyor...", en: "Sending..." },
+  "contact.close": { tr: "Kapat", en: "Close" },
+  "contact.success": { tr: "Mesajınız yöneticiye başarıyla iletildi! Size en kısa sürede dönüş yapılacaktır.", en: "Your message was sent to the administrator! We'll get back to you shortly." },
+  "contact.error": { tr: "Mesaj gönderilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.", en: "An error occurred while sending the message. Please try again later." },
+  "contact.fillFields": { tr: "Lütfen tüm alanları doldurun.", en: "Please fill in all fields." },
+
+  // Ana sayfa (dashboard)
+  "dash.welcome": { tr: "Alfa500'e Hoş Geldiniz", en: "Welcome to Alfa500" },
+  "dash.intro": { tr: "Yapay zeka destekli profesyonel borsa analiz platformunuz. Aşağıdaki modüllerden birini seçerek piyasanın bir adım önüne geçin.", en: "Your AI-powered professional market analysis platform. Pick a module below to stay one step ahead of the market." },
+  "dash.goMarkets": { tr: "Piyasalara Git", en: "Go to Markets" },
+  "dash.markets.label": { tr: "Piyasalar", en: "Markets" },
+  "dash.markets.desc": { tr: "Genel piyasa durumu, S&P 500 grafiği, endeksler ve makro takvim.", en: "Overall market state, S&P 500 chart, indices and macro calendar." },
+  "dash.heatmap.label": { tr: "Heatmap", en: "Heatmap" },
+  "dash.heatmap.desc": { tr: "Borsanın genel durumunu ve para giriş/çıkışını sektörlere göre ısı haritası üzerinden görselleştirin.", en: "Visualize the market and capital flows by sector via a heatmap." },
+  "dash.kap.label": { tr: "Haber Akışı", en: "News Feed" },
+  "dash.kap.desc": { tr: "Şirket haber ve bildirimlerini yapay zeka ile özetlenmiş şekilde anlık takip edin.", en: "Track company news and disclosures, AI-summarized, in real time." },
+  "dash.screener.label": { tr: "Screener (Hibrit)", en: "Screener (Hybrid)" },
+  "dash.screener.desc": { tr: "Tüm S&P 500 hisselerini kısa, orta ve uzun vade indikatörleriyle (hibrit) saniyeler içinde tarayın.", en: "Screen all S&P 500 stocks with short-, mid- and long-term (hybrid) indicators in seconds." },
+  "dash.topPicks15d.label": { tr: "Seçki 15G", en: "Picks 15D" },
+  "dash.topPicks15d.desc": { tr: "Sadece kısa vadeli (15 günlük) patlama potansiyeli arayan özel tarama motoru.", en: "A dedicated engine seeking only short-term (15-day) breakout potential." },
+  "dash.topPicks.label": { tr: "Seçki O-U Vade", en: "Picks Mid-Long" },
+  "dash.topPicks.desc": { tr: "Teknik indikatörlerin ürettiği AL sinyallerine göre orta ve uzun vadeli en yüksek potansiyelli hisseleri görün.", en: "See the highest-potential mid/long-term stocks based on BUY signals from technical indicators." },
+  "dash.alpharank.label": { tr: "AlphaRank 15D", en: "AlphaRank 15D" },
+  "dash.alpharank.desc": { tr: "Takip havuzunuzdaki hisseleri 15 günlük yükseliş potansiyellerine göre sıralayan yapay zeka destekli model.", en: "An AI-assisted model ranking your watchlist by 15-day upside potential." },
+  "dash.analysis.label": { tr: "Derin Analiz", en: "Deep Analysis" },
+  "dash.analysis.desc": { tr: "Bir hissenin teknik, sahiplik ve temel detaylarını derinlemesine inceleyin.", en: "Deep-dive into a stock's technical, ownership and fundamental details." },
+  "dash.backtest.label": { tr: "Backtest Modülü", en: "Backtest Module" },
+  "dash.backtest.desc": { tr: "Geçmiş piyasa verilerine dayanarak teknik indikatörlerin al-sat stratejilerini test edin ve kârlılığını ölçün.", en: "Test indicator buy/sell strategies on historical data and measure profitability." },
+  "dash.strategyCompare.label": { tr: "Strateji Kıyasla", en: "Compare Strategies" },
+  "dash.strategyCompare.desc": { tr: "Farklı al-sat stratejilerinin geçmiş getiri performanslarını birbiriyle kıyaslayıp en uygununu bulun.", en: "Compare historical returns of different strategies to find the best fit." },
+  "dash.risk.label": { tr: "Risk Analizi", en: "Risk Analysis" },
+  "dash.risk.desc": { tr: "Portföyünüzün ve piyasanın genel risk durumunu, volatilite oranlarını matematiksel modellerle analiz edin.", en: "Analyze portfolio and market risk and volatility with mathematical models." },
+  "dash.portfolio.label": { tr: "Sanal Portföy", en: "Virtual Portfolio" },
+  "dash.portfolio.desc": { tr: "Kendi sanal portföyünüzü oluşturun, alış/satış işlemlerinizi kaydedip anlık kâr/zarar durumunuzu takip edin.", en: "Build your virtual portfolio, log buy/sell trades and track live P/L." },
+  "dash.alarms.label": { tr: "Akıllı Alarmlar", en: "Smart Alerts" },
+  "dash.alarms.desc": { tr: "Fiyat veya özel teknik indikatör hedefleri belirleyin. Şartlar gerçekleştiğinde anında bildirim alın.", en: "Set price or custom indicator targets and get instant alerts when conditions are met." },
+
+  // Heatmap
+  "heatmap.title": { tr: "🗺️ Sektörel Isı Haritası", en: "🗺️ Sector Heatmap" },
+  "heatmap.subtitle": { tr: "S&P 500 ana hisselerinin sektörel bazda anlık performans görünümü", en: "Live sector-level performance of major S&P 500 stocks" },
+  "heatmap.loading": { tr: "Harita yükleniyor (Canlı fiyatlar çekiliyor)...", en: "Loading map (fetching live prices)..." },
+  "heatmap.loadError": { tr: "Harita yüklenemedi: ", en: "Failed to load map: " },
+
+  // KAP / Haber
+  "kap.title": { tr: "📰 Haber Analizi (Yapay Zeka)", en: "📰 News Analysis (AI)" },
+  "kap.subtitle": { tr: "Şirket haberlerinin otomatik duygu analizi (NLP)", en: "Automatic sentiment analysis of company news (NLP)" },
+  "kap.tickerPlaceholder": { tr: "Hisse Kodu (Örn: AAPL)", en: "Ticker (e.g. AAPL)" },
+  "kap.analyzing": { tr: "Analiz Ediliyor...", en: "Analyzing..." },
+  "kap.analyzeBtn": { tr: "Haberleri Analiz Et", en: "Analyze News" },
+  "kap.overallScore": { tr: "Genel Duygu Skoru", en: "Overall Sentiment Score" },
+  "kap.scoreRange": { tr: "(-100 ile +100 arası AI değerlendirmesi)", en: "(AI rating from -100 to +100)" },
+  "kap.colDate": { tr: "Tarih", en: "Date" },
+  "kap.colTitle": { tr: "Haber Başlığı", en: "Headline" },
+  "kap.colCategory": { tr: "Kategori", en: "Category" },
+  "kap.colScore": { tr: "AI Skoru", en: "AI Score" },
+  "kap.empty": { tr: "Hisse kodu girerek haberlerin NLP analizini başlatın.", en: "Enter a ticker to start NLP analysis of the news." },
+  "kap.noNews": { tr: "Son zamanlarda bu hisseye ait haber bulunamadı.", en: "No recent news found for this stock." },
+
+  // Markets
+  "markets.watchTitle": { tr: "Piyasa İzleme", en: "Watchlist" },
+  "markets.addPlaceholder": { tr: "AAPL, MSFT...", en: "AAPL, MSFT..." },
+  "markets.add": { tr: "Ekle", en: "Add" },
+  "markets.notFound": { tr: "Bulunamadı", en: "Not found" },
+  "markets.stockLabel": { tr: "S&P 500 Hissesi", en: "S&P 500 Stock" },
+  "markets.marketTag": { tr: "ABD", en: "US" },
+  "markets.livePrice": { tr: "Anlık Fiyat", en: "Live Price" },
+  "markets.changePct": { tr: "Değişim (%)", en: "Change (%)" },
+  "markets.noData": { tr: "Veri Yok", en: "No Data" },
+  "markets.loadingShort": { tr: "Yükleniyor...", en: "Loading..." },
+  "markets.indicatorsActive": { tr: "İndikatörler Aktif (SMA20, EMA50) 📈", en: "Indicators On (SMA20, EMA50) 📈" },
+  "markets.chartLoading": { tr: "Grafik Verileri Yükleniyor...", en: "Loading chart data..." },
+  "markets.noDataFor": { tr: "{t} için veri bulunamadı.", en: "No data found for {t}." },
+  "markets.addError": { tr: "Hisse izleme listesine eklenemedi (Veritabanı hatası).", en: "Could not add stock to watchlist (database error)." },
+  "markets.calTitle": { tr: "📅 Makroekonomik Takvim", en: "📅 Macroeconomic Calendar" },
+  "markets.calSubtitle": { tr: "FED & Enflasyon & İstihdam", en: "FED & Inflation & Employment" },
+  "markets.colDate": { tr: "Tarih", en: "Date" },
+  "markets.colTime": { tr: "Saat", en: "Time" },
+  "markets.colCountry": { tr: "Ülke", en: "Country" },
+  "markets.colEvent": { tr: "Olay", en: "Event" },
+  "markets.colForecast": { tr: "Beklenti", en: "Forecast" },
+  "markets.colPrevious": { tr: "Önceki", en: "Previous" },
+  "markets.calWaiting": { tr: "Veri Bekleniyor...", en: "Awaiting data..." },
+
+  // Analysis (Derin Analiz)
+  "an.title": { tr: "🔬 Kapsamlı Hisse Analizi", en: "🔬 Comprehensive Stock Analysis" },
+  "an.subtitle": { tr: "Yapay zeka, 100+ teknik indikatör ve risk algoritmaları ile detaylı profil", en: "A detailed profile with AI, 100+ technical indicators and risk algorithms" },
+  "an.analyzeBtn": { tr: "Analiz Et", en: "Analyze" },
+  "an.indicatorSignals": { tr: "🔍 İndikatör Sinyalleri", en: "🔍 Indicator Signals" },
+  "an.sendTelegram": { tr: "📤 Telegram'a Gönder", en: "📤 Send to Telegram" },
+  "an.fetchError": { tr: "Veriler çekilirken bir hata oluştu.", en: "An error occurred while fetching data." },
+  "an.waitingTitle": { tr: "Analiz Bekleniyor", en: "Awaiting Analysis" },
+  "an.waitingDesc": { tr: "Hisse senedi kodunu girerek derin analizi başlatın.", en: "Enter a ticker to start the deep analysis." },
+  "an.runningTitle": { tr: "Yapay Zeka Analizi Çalışıyor", en: "AI Analysis Running" },
+  "an.runningDesc": { tr: "100+ indikatör hesaplanıyor ve haberler yorumlanıyor. Lütfen bekleyin...", en: "Computing 100+ indicators and interpreting news. Please wait..." },
+  "an.hybridPotential": { tr: "Hibrit Potansiyel", en: "Hybrid Potential" },
+  "an.confidence": { tr: "Güven Skoru (PGS)", en: "Confidence Score (PGS)" },
+  "an.strategyByHorizon": { tr: "⏳ Vadelere Göre Strateji", en: "⏳ Strategy by Horizon" },
+  "an.shortTerm": { tr: "⚡ Kısa Vade (0-15 Gün)", en: "⚡ Short Term (0-15 Days)" },
+  "an.mediumTerm": { tr: "📅 Orta Vade (1-3 Ay)", en: "📅 Medium Term (1-3 Months)" },
+  "an.longTerm": { tr: "🔭 Uzun Vade (3-12 Ay)", en: "🔭 Long Term (3-12 Months)" },
+  "an.neutral": { tr: "NÖTR", en: "NEUTRAL" },
+  "an.riskTitle": { tr: "🛡️ Risk Yönetimi (ATR Bazlı)", en: "🛡️ Risk Management (ATR-based)" },
+  "an.stopLoss": { tr: "Stop Loss", en: "Stop Loss" },
+  "an.trailingStop": { tr: "İzleyen Stop (TS)", en: "Trailing Stop (TS)" },
+  "an.target1": { tr: "Hedef 1 (TP1)", en: "Target 1 (TP1)" },
+  "an.target2": { tr: "Hedef 2 (TP2)", en: "Target 2 (TP2)" },
+  "an.interTargetAtr": { tr: "Ara Hedef (ATR)", en: "Interim Target (ATR)" },
+  "an.interTargetPeak": { tr: "Ara Hedef (Zirve)", en: "Interim Target (Peak)" },
+  "an.smcTitle": { tr: "🔍 Market Yapısı (SMC)", en: "🔍 Market Structure (SMC)" },
+  "an.bos": { tr: "Düzen Kırılımı (BOS):", en: "Break of Structure (BOS):" },
+  "an.bosBreak": { tr: "Kırılım 🔥", en: "Break 🔥" },
+  "an.trendConfirm": { tr: "Trend Yönü Onayı:", en: "Trend Direction Confirmation:" },
+  "an.trendUp": { tr: "Yukarı Yönlü Market Değişimi", en: "Bullish Market Shift" },
+  "an.trendCons": { tr: "Konsolidasyon / Düşüş", en: "Consolidation / Downtrend" },
+  "an.chartLoading": { tr: "Grafik verisi yükleniyor veya bulunamadı...", en: "Chart data loading or not found..." },
+  "an.aiSummary": { tr: "🤖 Yapay Zeka Analiz Özeti", en: "🤖 AI Analysis Summary" },
+  "an.modalTitle": { tr: "🔍 İndikatör Sinyal Detayları", en: "🔍 Indicator Signal Details" },
+  "an.modalSubtitle": { tr: "100+ teknik kuralın mevcut durumu ve hisseye etkisi", en: "Current state of 100+ technical rules and their impact" },
+  "an.colRule": { tr: "İndikatör / Kural", en: "Indicator / Rule" },
+  "an.colStatus": { tr: "Durum", en: "Status" },
+  "an.colWeight": { tr: "Etki Ağırlığı", en: "Impact Weight" },
+  "an.weight": { tr: "Ağırlık", en: "Weight" },
+  "an.tgReport": { tr: "Analiz Raporu", en: "Analysis Report" },
+  "an.tgPrice": { tr: "Fiyat", en: "Price" },
+  "an.tgHybridScore": { tr: "Hibrit Skor", en: "Hybrid Score" },
+  "an.tgConfidence": { tr: "Güven Skoru", en: "Confidence Score" },
+  "an.tgDecision": { tr: "Stratejik Karar", en: "Strategic Decision" },
+  "an.tgRisk": { tr: "Risk Yönetimi", en: "Risk Management" },
+  "an.tgTrailing": { tr: "İzleyen Stop", en: "Trailing Stop" },
+  "an.tgAiSummary": { tr: "Yapay Zeka Özeti", en: "AI Summary" },
+  "an.tgSent": { tr: "Başarıyla gönderildi.", en: "Sent successfully." },
+  "an.tgError": { tr: "Gönderilirken bir hata oluştu.", en: "An error occurred while sending." },
+
+  // Screener
+  "sc.title": { tr: "⚡ Al-Sat Screener (Hibrit Tarama)", en: "⚡ Trade Screener (Hybrid Scan)" },
+  "sc.subtitle": { tr: "100 İndikatörlü Gelişmiş Algoritma ile S&P 500 Taraması", en: "S&P 500 scan with an advanced 100-indicator algorithm" },
+  "sc.logicTitle": { tr: "ℹ️ Tarama Mantığı:", en: "ℹ️ Scan Logic:" },
+  "sc.logicBody": { tr: " Bu modül; kısa (0-15 gün), orta (1-3 ay) ve uzun vade (3-12 ay) indikatörlerini harmanlayarak \"Hibrit\" bir puanlama yapar. Trendin genel sağlığını ölçmek için idealdir. Sadece kısa vade patlama potansiyeli arıyorsanız \"Seçki 15G\" modülünü, sadece orta-uzun vade sağlam hisseler arıyorsanız \"Seçki O-U Vade\" modülünü kullanın.", en: " This module blends short- (0-15 days), mid- (1-3 months) and long-term (3-12 months) indicators into a \"hybrid\" score. Ideal for gauging overall trend health. For short-term breakout potential only, use \"Picks 15D\"; for solid mid/long-term names, use \"Picks Mid-Long\"." },
+  "sc.starting": { tr: "Tarama başlatılıyor...", en: "Starting scan..." },
+  "sc.queued": { tr: "Sıraya alınıyor...", en: "Queuing..." },
+  "sc.loadingHistory": { tr: "Geçmiş sonuçlar yükleniyor...", en: "Loading past results..." },
+  "sc.scanError": { tr: "Tarama sırasında bir hata oluştu: ", en: "An error occurred during the scan: " },
+  "sc.mode30": { tr: "İlk 30 (Hızlı)", en: "Top 30 (Fast)" },
+  "sc.mode100": { tr: "İlk 100", en: "Top 100" },
+  "sc.modeAll": { tr: "Tüm Hisseler", en: "All Stocks" },
+  "sc.strategy": { tr: "Strateji:", en: "Strategy:" },
+  "sc.all": { tr: "Tümü", en: "All" },
+  "sc.brokenFalling": { tr: "🔥 Düşeni Kıran Hisseler", en: "🔥 Stocks Breaking Their Downtrend" },
+  "sc.last30": { tr: "Son 30 Tarama:", en: "Last 30 Scans:" },
+  "sc.select": { tr: "Seçiniz...", en: "Select..." },
+  "sc.scanning": { tr: "Tarama Yapılıyor...", en: "Scanning..." },
+  "sc.startScan": { tr: "Taramayı Başlat", en: "Start Scan" },
+  "sc.colStock": { tr: "Hisse", en: "Stock" },
+  "sc.colSignal": { tr: "Sinyal", en: "Signal" },
+  "sc.colTrendScore": { tr: "Trend & Skor", en: "Trend & Score" },
+  "sc.colPrice": { tr: "Fiyat", en: "Price" },
+  "sc.colBreak": { tr: "Düşen Kırılımı", en: "Downtrend Break" },
+  "sc.colInterTarget": { tr: "Ara Hedef", en: "Interim Target" },
+  "sc.colOwnership": { tr: "Kurumsal Sahiplik (Çeyreklik)", en: "Institutional Ownership (Quarterly)" },
+  "sc.colActions": { tr: "İşlemler", en: "Actions" },
+  "sc.confScore": { tr: "Güven Skoru", en: "Confidence Score" },
+  "sc.ownership": { tr: "Kurumsal", en: "Institutional" },
+  "sc.ownershipChange": { tr: "Çeyreklik Değişim", en: "Quarterly Change" },
+  "sc.emptyScan": { tr: "Seçili endeks üzerinde 100 farklı teknik indikatörle yapay zeka destekli analiz yapmak için Taramayı Başlatın.", en: "Start the scan to run AI-assisted analysis with 100 technical indicators on the selected index." },
+  "sc.scanningRows": { tr: "Borsadan anlık veriler çekiliyor ve yüzlerce indikatör hesaplanıyor... Lütfen bekleyin.", en: "Fetching live market data and computing hundreds of indicators... Please wait." },
+  "sc.inspect": { tr: "İncele", en: "Inspect" },
+  "sc.addPortfolio": { tr: "Portföye Ekle", en: "Add to Portfolio" },
+  "sc.addWatch": { tr: "Göstergelere Ekle", en: "Add to Charts" },
+  "sc.aiAnalyze": { tr: "AI Analiz", en: "AI Analysis" },
+  "sc.addedPortfolio": { tr: "{t} sanal portföye eklendi!", en: "{t} added to virtual portfolio!" },
+  "sc.portfolioError": { tr: "Portföye eklenirken hata oluştu.", en: "An error occurred while adding to the portfolio." },
+  "sc.alphaError": { tr: "AlphaRank havuzuna eklenemedi.", en: "Could not add to the AlphaRank pool." },
+  "sc.modalAddTitle": { tr: "Portföye Ekle: ", en: "Add to Portfolio: " },
+  "sc.modalTicker": { tr: "Hisse Kodu", en: "Ticker" },
+  "sc.modalCost": { tr: "Maliyet Fiyatı", en: "Cost Price" },
+  "sc.modalQty": { tr: "Adet", en: "Quantity" },
+  "sc.cancel": { tr: "İptal", en: "Cancel" },
+  "sc.buySave": { tr: "Satın Al (Kaydet)", en: "Buy (Save)" },
+
+  // Strategy Compare
+  "cmp.title": { tr: "🧪 Strateji Karşılaştırma Motoru", en: "🧪 Strategy Comparison Engine" },
+  "cmp.subtitle": { tr: "Farklı Algoritmaların Performans Çarpışması", en: "Performance face-off of different algorithms" },
+  "cmp.tickerPh": { tr: "Hisse Giriniz (Örn: AAPL, MSFT)", en: "Enter a ticker (e.g. AAPL, MSFT)" },
+  "cmp.period1y": { tr: "Zaman: Son 1 Yıl", en: "Period: Last 1 Year" },
+  "cmp.period6mo": { tr: "Zaman: Son 6 Ay", en: "Period: Last 6 Months" },
+  "cmp.period2y": { tr: "Zaman: Son 2 Yıl", en: "Period: Last 2 Years" },
+  "cmp.calculating": { tr: "Hesaplanıyor...", en: "Calculating..." },
+  "cmp.run": { tr: "Stratejileri Yarıştır", en: "Race the Strategies" },
+  "cmp.error": { tr: "Analiz sırasında hata oluştu.", en: "An error occurred during analysis." },
+  "cmp.annualReturn": { tr: "Yıllık Net Getiri", en: "Annual Net Return" },
+  "cmp.tradeCount": { tr: "İşlem Sayısı", en: "Trade Count" },
+  "cmp.running": { tr: "Analiz yapılıyor, lütfen bekleyin (Bu işlem yaklaşık 10-20 saniye sürebilir)...", en: "Analyzing, please wait (this may take ~10-20 seconds)..." },
+  "cmp.empty": { tr: "Analiz başlatmak için yukarıdan hisse girip butona tıklayın.", en: "Enter a ticker above and click the button to start the analysis." },
+
+  // Risk
+  "risk.title": { tr: "⚠️ Risk Yönetim Merkezi", en: "⚠️ Risk Management Center" },
+  "risk.subtitle": { tr: "Portföyünüzün Volatilite ve Beta Analizleri", en: "Volatility and beta analysis of your portfolio" },
+  "risk.loadError": { tr: "Risk verileri yüklenirken bir hata oluştu.", en: "An error occurred while loading risk data." },
+  "risk.infoWaiting": { tr: "Bilgi Bekleniyor", en: "Awaiting Data" },
+  "risk.betaTitle": { tr: "Portföy Beta Değeri (Piyasa Riski)", en: "Portfolio Beta (Market Risk)" },
+  "risk.varTitle": { tr: "Maksimum Kayıp İhtimali (VaR)", en: "Maximum Loss Probability (VaR)" },
+  "risk.varDesc": { tr: "Günlük %95 güven aralığında geçmiş verilere dayalı tahmini maksimum kayıp yüzdesi.", en: "Estimated maximum daily loss at a 95% confidence level, based on historical data." },
+  "risk.slTitle": { tr: "Aktif İşlemler İçin Dinamik Stop-Loss Önerileri (ATR)", en: "Dynamic Stop-Loss Suggestions for Open Positions (ATR)" },
+  "risk.noActive": { tr: "Analiz edilecek aktif işlem bulunamadı.", en: "No open positions to analyze." },
+  "risk.colStock": { tr: "Hisse", en: "Stock" },
+  "risk.colQty": { tr: "Adet", en: "Qty" },
+  "risk.colCost": { tr: "Alış Maliyeti", en: "Cost Basis" },
+  "risk.colLive": { tr: "Anlık Fiyat", en: "Live Price" },
+  "risk.colStop": { tr: "Önerilen Stop", en: "Suggested Stop" },
+  "risk.colRisk": { tr: "Risk Durumu", en: "Risk Status" },
+  "risk.betaNone": { tr: "Portföyde hisse yok.", en: "No stocks in portfolio." },
+  "risk.betaDefensive": { tr: "Piyasadan %{n} daha az dalgalı. Defansif bir portföy.", en: "{n}% less volatile than the market. A defensive portfolio." },
+  "risk.betaAggressive": { tr: "Piyasadan %{n} daha hareketli. Agresif bir portföy.", en: "{n}% more volatile than the market. An aggressive portfolio." },
+  "risk.betaBalanced": { tr: "Piyasa ile benzer hareket ediyor. Dengeli bir portföy.", en: "Moves similarly to the market. A balanced portfolio." },
+  "risk.statusHigh": { tr: "Yüksek", en: "High" },
+  "risk.statusMedium": { tr: "Orta", en: "Medium" },
+  "risk.statusLow": { tr: "Düşük", en: "Low" },
+
+  // SMC
+  "smc.title": { tr: "📐 SMC Terminali", en: "📐 SMC Terminal" },
+  "smc.subtitle": { tr: "Smart Money Concepts (Akıllı Para Konseptleri) ile Market Yapısı Kırılımlarını (BOS) İnceleyin", en: "Examine Market Structure Breaks (BOS) with Smart Money Concepts" },
+  "smc.logicTitle": { tr: "ℹ️ SMC Mantığı:", en: "ℹ️ SMC Logic:" },
+  "smc.logicBody": { tr: " Fiyat hareketlerindeki arz ve talep bölgelerini izler. Zirve seviyesi yukarı yönlü geçildiğinde (BOS - Break of Structure), yükseliş trendi teyit edilir.", en: " Tracks supply and demand zones in price action. When a peak is broken to the upside (BOS - Break of Structure), the uptrend is confirmed." },
+  "smc.tickerPh": { tr: "Hisse Kodu (Örn: AAPL)", en: "Ticker (e.g. AAPL)" },
+  "smc.analyzeBtn": { tr: "Analiz Et", en: "Analyze" },
+  "smc.fetchError": { tr: "Veriler alınırken bir hata oluştu.", en: "An error occurred while fetching data." },
+  "smc.calculating": { tr: "SMC verileri hesaplanıyor...", en: "Computing SMC data..." },
+  "smc.empty": { tr: "SMC analizi yapmak için lütfen yukarıdan bir hisse kodu (örn: AAPL) girin.", en: "Enter a ticker above (e.g. AAPL) to run SMC analysis." },
+  "smc.chartTitle": { tr: "SMC Grafiği", en: "SMC Chart" },
+  "smc.noChart": { tr: "Grafik verisi bulunamadı.", en: "No chart data found." },
+  "smc.structureTitle": { tr: "Market Yapısı Analizi", en: "Market Structure Analysis" },
+  "smc.statusBos": { tr: "Durum (BOS)", en: "Status (BOS)" },
+  "smc.broke": { tr: "KIRILIM GERÇEKLEŞTİ 🔥", en: "BREAK OCCURRED 🔥" },
+  "smc.noBreak": { tr: "KIRILIM YOK", en: "NO BREAK" },
+  "smc.brokeDesc": { tr: "Son zirve noktası hacimli bir şekilde yukarı yönlü kırıldı. Yükseliş trendinin teyit edildiği anlamına gelir.", en: "The last peak was broken to the upside on volume — confirming the uptrend." },
+  "smc.noBreakDesc": { tr: "Henüz bir market yapısı kırılımı gözlemlenmedi. Konsolidasyon veya düşüş süreci devam ediyor olabilir.", en: "No market structure break observed yet. Consolidation or a downtrend may still be in progress." },
+  "smc.localPeak": { tr: "Lokal Zirve (Direnç)", en: "Local Peak (Resistance)" },
+  "smc.localTrough": { tr: "Lokal Dip (Destek)", en: "Local Trough (Support)" },
+
+  // Backtest
+  "bt.title": { tr: "💼 Gelişmiş Backtest Modülü", en: "💼 Advanced Backtest Module" },
+  "bt.subtitle": { tr: "100 İndikatörlü AI Sinyallerinin Geçmiş Performans Testi", en: "Historical performance test of 100-indicator AI signals" },
+  "bt.ticker": { tr: "Hisse Kodu", en: "Ticker" },
+  "bt.capital": { tr: "Başlangıç Sermayesi ($)", en: "Initial Capital ($)" },
+  "bt.duration": { tr: "Test Süresi (Gün)", en: "Test Period (Days)" },
+  "bt.dur90": { tr: "Son 3 Ay (90 Gün)", en: "Last 3 Months (90 Days)" },
+  "bt.dur180": { tr: "Son 6 Ay (180 Gün)", en: "Last 6 Months (180 Days)" },
+  "bt.dur365": { tr: "Son 1 Yıl (365 Gün)", en: "Last 1 Year (365 Days)" },
+  "bt.buyScore": { tr: "Alım Skoru (≥)", en: "Buy Score (≥)" },
+  "bt.sellScore": { tr: "Satım Skoru (≤)", en: "Sell Score (≤)" },
+  "bt.stopLoss": { tr: "Stop Loss (%)", en: "Stop Loss (%)" },
+  "bt.takeProfit": { tr: "Take Profit (%)", en: "Take Profit (%)" },
+  "bt.slippage": { tr: "Kayma / Slippage (%)", en: "Slippage (%)" },
+  "bt.commission": { tr: "Komisyon Oranı", en: "Commission Rate" },
+  "bt.simulating": { tr: "Simüle Ediliyor...", en: "Simulating..." },
+  "bt.start": { tr: "Testi Başlat", en: "Start Test" },
+  "bt.netReturn": { tr: "Net Getiri", en: "Net Return" },
+  "bt.riskFree": { tr: "Risksiz Getiri (Hazine)", en: "Risk-Free Return (Treasury)" },
+  "bt.winRate": { tr: "Başarı Oranı (Win Rate)", en: "Win Rate" },
+  "bt.maxDD": { tr: "Max Drawdown (Zarar)", en: "Max Drawdown" },
+  "bt.tradeCount": { tr: "Al/Sat İşlem Sayısı", en: "Buy/Sell Trade Count" },
+  "bt.trades": { tr: "İşlem", en: "Trades" },
+  "bt.profitFactor": { tr: "Kâr Faktörü (Profit Factor)", en: "Profit Factor" },
+  "bt.sharpe": { tr: "Sharpe Oranı", en: "Sharpe Ratio" },
+
+  // Karne (Scorecard)
+  "kar.title": { tr: "🏅 Sinyal Karnesi", en: "🏅 Signal Scorecard" },
+  "kar.intro": { tr: "Seçki 15G'nin ürettiği sinyaller her gün otomatik kaydedilir ve 15 işlem günü sonra gerçek getirisiyle puanlanır. Bu sayfa modelin gerçek isabet oranını ve ortalama getirisini skor bandına göre gösterir — yani tahmin değil, ölçüm.", en: "Picks-15D signals are recorded automatically each day and scored against their real return after 15 trading days. This page shows the model's actual hit rate and average return by score band — measurement, not prediction." },
+  "kar.dataError": { tr: "Karne verisi alınamadı.", en: "Could not load scorecard data." },
+  "kar.refresh": { tr: "↻ Yenile", en: "↻ Refresh" },
+  "kar.loading": { tr: "Yükleniyor…", en: "Loading…" },
+  "kar.hit": { tr: "isabet", en: "hit rate" },
+  "kar.avgReturn": { tr: "ort. getiri", en: "avg return" },
+  "kar.signal": { tr: "sinyal", en: "signals" },
+  "kar.liveAvgReturn": { tr: "anlık ort. getiri", en: "live avg return" },
+  "kar.nowProfit": { tr: "şu an kârda", en: "now in profit" },
+  "kar.ongoingTitle": { tr: "📈 Devam Eden Sinyaller (Anlık)", en: "📈 Ongoing Signals (Live)" },
+  "kar.ongoingDesc": { tr: "Vadesi dolmamış sinyallerin şu ana kadarki (gerçekleşmemiş) getirisi — 15 işlem günü beklemeden nasıl gittiğini gösterir. Canlıdır, her gün oynar; nihai sonuç değildir.", en: "The so-far (unrealized) return of signals that haven't matured — shows how they're doing before the 15 trading days are up. Live, changes daily; not a final result." },
+  "kar.allOngoing": { tr: "Tümü (devam eden)", en: "All (ongoing)" },
+  "kar.week1": { tr: "1. Hafta (0-5 gün)", en: "Week 1 (0-5 days)" },
+  "kar.week2": { tr: "2. Hafta (5-10 gün)", en: "Week 2 (5-10 days)" },
+  "kar.week3": { tr: "3. Hafta (10+ gün)", en: "Week 3 (10+ days)" },
+  "kar.emptyTitle": { tr: "Nihai karne henüz boş", en: "Final scorecard is still empty" },
+  "kar.emptyDesc": { tr: "Kesinleşmiş (vadesi dolmuş) isabet/getiri, ilk snapshot'tan ~15 işlem günü sonra dolmaya başlar. O zamana kadar yukarıdaki \"Devam Eden Sinyaller\" panelinden anlık durumu izleyebilirsin.", en: "Finalized (matured) hit rate/return starts populating ~15 trading days after the first snapshot. Until then, watch the live status in the \"Ongoing Signals\" panel above." },
+  "kar.pendingLabel": { tr: "Bekleyen (vadesi dolmamış) sinyal: ", en: "Pending (not yet matured) signals: " },
+  "kar.general": { tr: "Genel", en: "Overall" },
+  "kar.allSignals": { tr: "Tüm Sinyaller", en: "All Signals" },
+  "kar.scored": { tr: "puanlandı", en: "scored" },
+  "kar.awaitingMaturity": { tr: "vadesi bekliyor", en: "awaiting maturity" },
+  "kar.byBand": { tr: "Skor Bandına Göre", en: "By Score Band" },
+  "kar.byBandDesc": { tr: "Yüksek skorlu sinyaller gerçekten daha mı isabetli? Skorun ayırt ediciliğini buradan görürsün.", en: "Are higher-scored signals actually more accurate? See how well the score discriminates." },
+  "kar.bandStrong": { tr: "🟢 Güçlü Al (skor ≥ 80)", en: "🟢 Strong Buy (score ≥ 80)" },
+  "kar.bandBuy": { tr: "📈 Al (70–80)", en: "📈 Buy (70–80)" },
+  "kar.bandMid": { tr: "⚖️ Orta (55–70)", en: "⚖️ Medium (55–70)" },
+  "kar.bandLow": { tr: "📉 Düşük (< 55)", en: "📉 Low (< 55)" },
+  "kar.bullTitle": { tr: "Boğa Flaması Etkisi", en: "Bull Flag Effect" },
+  "kar.bullDesc": { tr: "Boğa Flaması formasyonu olan sinyaller, olmayanlardan daha mı başarılı? Formasyonun katkısı.", en: "Are signals with a Bull Flag more successful than those without? The pattern's contribution." },
+  "kar.withBull": { tr: "🚩 Boğa Flaması olanlar", en: "🚩 With Bull Flag" },
+  "kar.withoutBull": { tr: "Boğa Flaması olmayanlar", en: "Without Bull Flag" },
+  "kar.footnote": { tr: "* Getiri, sinyal günündeki fiyattan 15 işlem günü sonraki fiyata göre hesaplanır (komisyon hariç). Yatırım tavsiyesi değildir.", en: "* Return is computed from the price on the signal day to the price 15 trading days later (excluding commissions). Not investment advice." },
+
+  // AlphaRank
+  "ar.title": { tr: "🚀 AlphaRank 15D", en: "🚀 AlphaRank 15D" },
+  "ar.subtitle": { tr: "Dinamik 15 Günlük Yükseliş Potansiyeli Sıralama Motoru", en: "Dynamic 15-Day Upside Potential Ranking Engine" },
+  "ar.historyLoaded": { tr: "Geçmiş analiz başarıyla yüklendi.", en: "Past analysis loaded successfully." },
+  "ar.historyError": { tr: "Geçmiş analiz yüklenemedi.", en: "Could not load past analysis." },
+  "ar.addError": { tr: "Hisse eklenemedi.", en: "Could not add stock." },
+  "ar.removeError": { tr: "Hisse silinemedi.", en: "Could not remove stock." },
+  "ar.cleared": { tr: "Havuz tamamen temizlendi.", en: "Pool cleared completely." },
+  "ar.clearError": { tr: "Havuz temizlenemedi.", en: "Could not clear pool." },
+  "ar.analyzeDone": { tr: "Analiz tamamlandı.", en: "Analysis complete." },
+  "ar.analyzeFail": { tr: "Analiz başarısız.", en: "Analysis failed." },
+  "ar.tgFail": { tr: "Telegram gönderimi başarısız.", en: "Telegram send failed." },
+  "ar.poolTitle": { tr: "📋 Aday Havuzu", en: "📋 Candidate Pool" },
+  "ar.tickerPh": { tr: "Hisse Kodu (Örn: AAPL)", en: "Ticker (e.g. AAPL)" },
+  "ar.poolEmpty": { tr: "Havuzunuz boş. Analiz için hisse ekleyin.", en: "Your pool is empty. Add stocks to analyze." },
+  "ar.remove": { tr: "Sil", en: "Remove" },
+  "ar.pastAnalyses": { tr: "Geçmiş Analizler", en: "Past Analyses" },
+  "ar.newAnalysisOpt": { tr: "-- Yeni Analiz --", en: "-- New Analysis --" },
+  "ar.startAnalysis": { tr: "🔬 Yeni Analizi Başlat", en: "🔬 Start New Analysis" },
+  "ar.clearPool": { tr: "Havuzu Temizle", en: "Clear Pool" },
+  "ar.resultsTitle": { tr: "📊 Analiz Sonuçları ve Sıralama", en: "📊 Analysis Results & Ranking" },
+  "ar.sendTelegram": { tr: "Telegram'a Gönder", en: "Send to Telegram" },
+  "ar.analyzingTitle": { tr: "Yapay Zeka Analiz Yapıyor...", en: "AI is analyzing..." },
+  "ar.analyzingDesc": { tr: "Seçtiğiniz hisseler AlphaRank modeli ile değerlendiriliyor. Bu işlem kısa sürecektir, lütfen bekleyin.", en: "Your selected stocks are being evaluated with the AlphaRank model. This will be quick, please wait." },
+  "ar.noAnalysisTitle": { tr: "Henüz Analiz Yapılmadı", en: "No Analysis Yet" },
+  "ar.noAnalysisDesc": { tr: "Sol taraftaki listeye takip ettiğiniz hisseleri ekleyin ve \"Analizi Başlat\" butonuna tıklayarak MACD, RSI, EMA ve Bollinger temelli yapay zeka destekli potansiyel sıralamasını görün.", en: "Add stocks you follow to the list on the left and click \"Start Analysis\" to see an AI-assisted potential ranking based on MACD, RSI, EMA and Bollinger." },
+  "ar.price": { tr: "Fiyat", en: "Price" },
+  "ar.upsideProb": { tr: "Yükseliş Olasılığı", en: "Upside Probability" },
+  "ar.evidence": { tr: "Kanıtlar & Gerekçeler", en: "Evidence & Rationale" },
+
+  // Robot
+  "rb.title": { tr: "Otonom Robot (Paper Trading)", en: "Autonomous Robot (Paper Trading)" },
+  "rb.subtitle": { tr: "Sanal bakiye ile çalışan otonom al-sat robotu. Stratejileri risksiz test edin.", en: "An autonomous trading robot running on a virtual balance. Test strategies risk-free." },
+  "rb.refresh": { tr: "🔄 Verileri Yenile", en: "🔄 Refresh Data" },
+  "rb.refreshing": { tr: "Yenileniyor...", en: "Refreshing..." },
+  "rb.startFail": { tr: "Robot başlatılamadı.", en: "Could not start the robot." },
+  "rb.stopConfirm": { tr: "Robotu durdurmak ve elindeki tüm hisseleri satmak istediğinize emin misiniz?", en: "Are you sure you want to stop the robot and sell all held positions?" },
+  "rb.cancel": { tr: "İptal", en: "Cancel" },
+  "rb.confirmStop": { tr: "Eminim, Durdur", en: "Yes, Stop" },
+  "rb.stopped": { tr: "Robot durduruldu.", en: "Robot stopped." },
+  "rb.stopFail": { tr: "Robot durdurulamadı.", en: "Could not stop the robot." },
+  "rb.startTitle": { tr: "Robotu Başlat", en: "Start the Robot" },
+  "rb.initialCapital": { tr: "Başlangıç Sermayesi (Sanal $)", en: "Initial Capital (Virtual $)" },
+  "rb.runDuration": { tr: "Çalışma Süresi (Gün)", en: "Run Duration (Days)" },
+  "rb.modeRisk": { tr: "Çalışma Modu & Risk Seviyesi", en: "Mode & Risk Level" },
+  "rb.modeCautious": { tr: "Temkinli (Max 8 Hisse - Düşük Risk)", en: "Cautious (Max 8 stocks - Low Risk)" },
+  "rb.modeNormal": { tr: "Normal (Max 5 Hisse - Dengeli)", en: "Normal (Max 5 stocks - Balanced)" },
+  "rb.modeAggressive": { tr: "Agresif (Max 3 Hisse - Yüksek Kazanç/Risk)", en: "Aggressive (Max 3 stocks - High Reward/Risk)" },
+  "rb.startBtn": { tr: "Robotu Başlat 🚀", en: "Start Robot 🚀" },
+  "rb.prevSession": { tr: "Önceki Seans Sonucu", en: "Previous Session Result" },
+  "rb.start": { tr: "Başlangıç", en: "Start" },
+  "rb.end": { tr: "Bitiş", en: "End" },
+  "rb.return": { tr: "Getiri", en: "Return" },
+  "rb.initialCapShort": { tr: "Başlangıç Sermayesi", en: "Initial Capital" },
+  "rb.mode": { tr: "Mod", en: "Mode" },
+  "rb.cashBalance": { tr: "Nakit Bakiye", en: "Cash Balance" },
+  "rb.totalAssets": { tr: "Toplam Varlık", en: "Total Assets" },
+  "rb.netPnl": { tr: "Net Getiri (P/L)", en: "Net Return (P/L)" },
+  "rb.tradesComm": { tr: "İşlem & Komisyon", en: "Trades & Commission" },
+  "rb.trades": { tr: "İşlem", en: "Trades" },
+  "rb.endDate": { tr: "Bitiş Tarihi", en: "End Date" },
+  "rb.forceClose": { tr: "Zorunlu Kapat & Sat 🛑", en: "Force Close & Sell 🛑" },
+  "rb.activePortfolio": { tr: "Aktif Portföy", en: "Active Portfolio" },
+  "rb.colStock": { tr: "Hisse", en: "Stock" },
+  "rb.colQty": { tr: "Adet", en: "Qty" },
+  "rb.colCost": { tr: "Maliyet", en: "Cost" },
+  "rb.colLive": { tr: "Anlık Fiyat", en: "Live Price" },
+  "rb.colValue": { tr: "Değer ($)", en: "Value ($)" },
+  "rb.colPnl": { tr: "Kâr/Zarar", en: "P/L" },
+  "rb.noHoldings": { tr: "Şu an elde tutulan hisse yok. Robot piyasayı tarıyor...", en: "No holdings right now. The robot is scanning the market..." },
+  "rb.tradeLogs": { tr: "İşlem Logları (Trades)", en: "Trade Logs" },
+  "rb.colDate": { tr: "Tarih", en: "Date" },
+  "rb.colAction": { tr: "İşlem", en: "Action" },
+  "rb.colPrice": { tr: "Fiyat", en: "Price" },
+  "rb.colReason": { tr: "Neden", en: "Reason" },
+  "rb.noTrades": { tr: "Henüz bir alım/satım işlemi gerçekleştirilmedi.", en: "No buy/sell trades yet." },
+  "rb.prevSessions": { tr: "Önceki Robot Seansları", en: "Previous Robot Sessions" },
+  "rb.colStart": { tr: "Başlangıç", en: "Start" },
+  "rb.colEnd": { tr: "Bitiş (Süre Sonu)", en: "End (Expiry)" },
+  "rb.colInitCap": { tr: "Başlangıç Sermayesi", en: "Initial Capital" },
+  "rb.colEndAssets": { tr: "Bitiş Varlığı", en: "Ending Assets" },
+  "rb.colComm": { tr: "Ödenen Komisyon", en: "Commission Paid" },
+  "rb.colNetReturn": { tr: "Net Getiri", en: "Net Return" },
+
+  // Indicators (Pro Terminal)
+  "ind.watchlist": { tr: "İzleme Listem", en: "My Watchlist" },
+  "ind.addPh": { tr: "AAPL", en: "AAPL" },
+  "ind.listEmpty": { tr: "Listeniz boş.", en: "Your list is empty." },
+  "ind.listEmptyHint": { tr: "AlphaRank, Screener veya diğer listelerden hisselerin yanındaki + butonuna basarak buraya ekleyebilirsiniz.", en: "Add stocks here by clicking the + next to them in AlphaRank, Screener or other lists." },
+  "ind.removeFromList": { tr: "Listeden Çıkar", en: "Remove from list" },
+  "ind.dataError": { tr: "{t} verisi alınamadı.", en: "Could not load data for {t}." },
+  "ind.aiError": { tr: "Yapay Zeka analizi sırasında bir hata oluştu.", en: "An error occurred during AI analysis." },
+  "ind.saved": { tr: "Analiz kaydedildi!", en: "Analysis saved!" },
+  "ind.noSelection": { tr: "Seçim Yok", en: "No Selection" },
+  "ind.pastAiResults": { tr: "Geçmiş Yapay Zeka Analiz Sonuçları ▾", en: "Past AI Analysis Results ▾" },
+  "ind.recentAnalyses": { tr: "Son Analizler", en: "Recent Analyses" },
+  "ind.noRecord": { tr: "Kayıt yok", en: "No records" },
+  "ind.analyzeWithAi": { tr: "🤖 YAPAY ZEKA İLE ANALİZ ET", en: "🤖 ANALYZE WITH AI" },
+  "ind.selectStock": { tr: "Soldaki menüden bir hisse seçin.", en: "Select a stock from the menu on the left." },
+  "ind.chartsLoading": { tr: "Grafikler Yükleniyor...", en: "Loading charts..." },
+  "ind.aiStarting": { tr: "🤖 Yapay Zeka Analizi Başlatılıyor", en: "🤖 Starting AI Analysis" },
+  "ind.aiIntro": { tr: "Analiz, şu an grafikte aktif olan aşağıdaki indikatörlerin matematiksel kesişimleri kullanılarak yapılacaktır:", en: "The analysis will use the mathematical intersections of the indicators currently active on the chart:" },
+  "ind.noIndicators": { tr: "Sadece fiyat ve hacim (İndikatör seçilmedi)", en: "Price and volume only (no indicators selected)" },
+  "ind.aiNote": { tr: "İsterseniz iptal edip grafikteki indikatör sayısını azaltabilir veya arttırabilirsiniz. Bu işlem kotanızı etkiler.", en: "You can cancel and add or remove indicators on the chart. This action uses your quota." },
+  "ind.cancel": { tr: "İptal", en: "Cancel" },
+  "ind.startAnalysis": { tr: "Analizi Başlat", en: "Start Analysis" },
+  "ind.decisionMatrix": { tr: "Kantitatif Karar Matrisi", en: "Quantitative Decision Matrix" },
+  "ind.close": { tr: "Kapat", en: "Close" },
+  "ind.saveResult": { tr: "💾 Sonucu Kaydet", en: "💾 Save Result" },
+  "ind.aiReading": { tr: "Yapay Zeka grafiği okuyor, lütfen bekleyin...", en: "AI is reading the chart, please wait..." },
+
+  // Alarms
+  "al.title": { tr: "🔔 Alarm Merkezi", en: "🔔 Alert Center" },
+  "al.subtitle": { tr: "Fiyat veya İndikatör Şartları Gerçekleştiğinde Bildirim Alın", en: "Get notified when price or indicator conditions are met" },
+  "al.newAlarm": { tr: "+ Yeni Alarm Kur", en: "+ New Alert" },
+  "al.loginNeeded": { tr: "Bu sayfayı görmek için giriş yapmanız gerekiyor.", en: "You need to log in to view this page." },
+  "al.loadError": { tr: "Alarmlar yüklenirken bir hata oluştu.", en: "An error occurred while loading alerts." },
+  "al.deleteConfirm": { tr: "Bu alarmı silmek istediğinize emin misiniz?", en: "Are you sure you want to delete this alert?" },
+  "al.cancel": { tr: "İptal", en: "Cancel" },
+  "al.confirmDelete": { tr: "Eminim, Sil", en: "Yes, Delete" },
+  "al.deleted": { tr: "Alarm silindi.", en: "Alert deleted." },
+  "al.deleteError": { tr: "Alarm silinirken bir hata oluştu.", en: "An error occurred while deleting the alert." },
+  "al.tickerEmpty": { tr: "Hisse kodu boş bırakılamaz.", en: "Ticker cannot be empty." },
+  "al.validValue": { tr: "Geçerli bir hedef değer girin.", en: "Enter a valid target value." },
+  "al.saveError": { tr: "Alarm kaydedilemedi.", en: "Could not save the alert." },
+  "al.statusActive": { tr: "Aktif", en: "Active" },
+  "al.statusTriggered": { tr: "✅ Tetiklendi", en: "✅ Triggered" },
+  "al.statusPending": { tr: "Beklemede", en: "Pending" },
+  "al.colStock": { tr: "Hisse", en: "Stock" },
+  "al.colCondition": { tr: "Koşul", en: "Condition" },
+  "al.colTarget": { tr: "Hedef Değer", en: "Target Value" },
+  "al.colNote": { tr: "Not", en: "Note" },
+  "al.colStatus": { tr: "Durum", en: "Status" },
+  "al.colAction": { tr: "İşlem", en: "Action" },
+  "al.loadingAlarms": { tr: "Alarmlar yükleniyor...", en: "Loading alerts..." },
+  "al.emptyTitle": { tr: "Henüz alarm kurulmamış", en: "No alerts set yet" },
+  "al.emptyDesc": { tr: "Sağ üstteki \"Yeni Alarm Kur\" butonuna basarak başlayın.", en: "Get started by clicking \"New Alert\" in the top right." },
+  "al.delete": { tr: "Sil", en: "Delete" },
+  "al.modalTitle": { tr: "🔔 Yeni Alarm Kur", en: "🔔 New Alert" },
+  "al.modalSubtitle": { tr: "Koşul gerçekleştiğinde sisteme kaydedilecek", en: "It will be saved when the condition is met" },
+  "al.fTicker": { tr: "Hisse Kodu", en: "Ticker" },
+  "al.fTickerPh": { tr: "AAPL, MSFT, NVDA...", en: "AAPL, MSFT, NVDA..." },
+  "al.fCondition": { tr: "Alarm Koşulu", en: "Alert Condition" },
+  "al.fTarget": { tr: "Hedef Değer", en: "Target Value" },
+  "al.fNote": { tr: "Not (İsteğe Bağlı)", en: "Note (Optional)" },
+  "al.fNotePh": { tr: "Kırılım hedefi, destek seviyesi...", en: "Breakout target, support level..." },
+  "al.saving": { tr: "Kaydediliyor...", en: "Saving..." },
+  "al.saveAlarm": { tr: "Alarmı Kaydet ✓", en: "Save Alert ✓" },
+  "al.condPriceAbove": { tr: "Fiyat Şunu Geçerse ↑", en: "Price rises above ↑" },
+  "al.condPriceBelow": { tr: "Fiyat Şuna Düşerse ↓", en: "Price falls below ↓" },
+  "al.condRsiAbove": { tr: "RSI Aşırı Alım Bölgesinde (>)", en: "RSI in overbought zone (>)" },
+  "al.condRsiBelow": { tr: "RSI Aşırı Satım Bölgesinde (<)", en: "RSI in oversold zone (<)" },
+
+  // Portfolio
+  "pf.title": { tr: "💼 Sanal Portföy", en: "💼 Virtual Portfolio" },
+  "pf.subtitle": { tr: "Açık pozisyonlarınızı ve kâr/zarar durumunuzu takip edin", en: "Track your open positions and P/L" },
+  "pf.refreshing": { tr: "⏳ Yenileniyor...", en: "⏳ Refreshing..." },
+  "pf.refreshPrices": { tr: "🔄 Fiyatları Yenile", en: "🔄 Refresh Prices" },
+  "pf.optimizeAi": { tr: "🪄 AI ile Optimize Et", en: "🪄 Optimize with AI" },
+  "pf.newTrade": { tr: "+ Yeni İşlem Ekle", en: "+ Add New Trade" },
+  "pf.tradeAdded": { tr: "İşlem başarıyla eklendi.", en: "Trade added successfully." },
+  "pf.tradeAddError": { tr: "İşlem eklenirken hata oluştu.", en: "An error occurred while adding the trade." },
+  "pf.dupConfirm": { tr: "\"{t}\" hissesi portföyünüzde zaten bulunuyor. Devam ederseniz lot sayınız artacak ve ortalama maliyetiniz yeniden hesaplanacaktır. Onaylıyor musunuz?", en: "\"{t}\" is already in your portfolio. Continuing will increase your share count and recompute your average cost. Confirm?" },
+  "pf.cancel": { tr: "İptal", en: "Cancel" },
+  "pf.confirm": { tr: "Onaylıyorum", en: "Confirm" },
+  "pf.updateError": { tr: "Güncellenirken hata oluştu.", en: "An error occurred while updating." },
+  "pf.closeError": { tr: "Kapatılırken hata oluştu.", en: "An error occurred while closing." },
+  "pf.minTwoOpt": { tr: "Optimizasyon için portföyünüzde en az 2 hisse bulunmalıdır.", en: "You need at least 2 stocks in your portfolio to optimize." },
+  "pf.optFail": { tr: "Optimizasyon başarısız oldu.", en: "Optimization failed." },
+  "pf.minTwoOpt2": { tr: "Optimizasyon için en az 2 hisse eklemelisiniz.", en: "You need to add at least 2 stocks to optimize." },
+  "pf.totalInvest": { tr: "Toplam Yatırım", en: "Total Investment" },
+  "pf.portfolioValue": { tr: "Portföy Değeri", en: "Portfolio Value" },
+  "pf.netPnl": { tr: "Net Kâr / Zarar", en: "Net P/L" },
+  "pf.avgPe": { tr: "Ort. F/K", en: "Avg P/E" },
+  "pf.avgPb": { tr: "Ort. PD/DD", en: "Avg P/B" },
+  "pf.sectorDist": { tr: "Sektör Dağılımı", en: "Sector Distribution" },
+  "pf.topSectors": { tr: "En Yüksek Sektörler", en: "Top Sectors" },
+  "pf.fundWaiting": { tr: "Temel Veri Bekleniyor...", en: "Awaiting fundamental data..." },
+  "pf.colStock": { tr: "Hisse", en: "Stock" },
+  "pf.colQty": { tr: "Adet", en: "Qty" },
+  "pf.colCost": { tr: "Maliyet", en: "Cost" },
+  "pf.colBuyAmount": { tr: "Alış Tutarı", en: "Buy Amount" },
+  "pf.colCurrent": { tr: "Güncel Fiyat", en: "Current Price" },
+  "pf.colPnl": { tr: "Kâr/Zarar", en: "P/L" },
+  "pf.colAction": { tr: "İşlem", en: "Action" },
+  "pf.noPositions": { tr: "Henüz açık pozisyonunuz bulunmuyor.", en: "You have no open positions yet." },
+  "pf.lot": { tr: "Lot", en: "sh" },
+  "pf.priceLoading": { tr: "Yükleniyor...", en: "Loading..." },
+  "pf.edit": { tr: "Düzenle", en: "Edit" },
+  "pf.close": { tr: "Kapat", en: "Close" },
+  "pf.addModalTitle": { tr: "Yeni İşlem Ekle (Alış)", en: "Add New Trade (Buy)" },
+  "pf.fTicker": { tr: "Hisse Kodu", en: "Ticker" },
+  "pf.fTickerPh": { tr: "Örn: AAPL", en: "e.g. AAPL" },
+  "pf.fQty": { tr: "Adet (Lot)", en: "Quantity (shares)" },
+  "pf.fCost": { tr: "Maliyet (Alış Fiyatı) $", en: "Cost (Buy Price) $" },
+  "pf.fBuyDate": { tr: "Alış Tarihi (Opsiyonel)", en: "Buy Date (Optional)" },
+  "pf.fBuyDateReq": { tr: "Alış Tarihi", en: "Buy Date" },
+  "pf.save": { tr: "Kaydet", en: "Save" },
+  "pf.editTitle": { tr: "Pozisyonu Düzenle: ", en: "Edit Position: " },
+  "pf.update": { tr: "Güncelle", en: "Update" },
+  "pf.closeTitle": { tr: "Pozisyonu Kapat: ", en: "Close Position: " },
+  "pf.sellPrice": { tr: "Satış Fiyatı $", en: "Sell Price $" },
+  "pf.closeNote": { tr: "Bu hisse kapalı pozisyonlara taşınacak ve gerçekleşen kâr/zarar kaydedilecektir.", en: "This stock will move to closed positions and the realized P/L will be recorded." },
+  "pf.confirmSell": { tr: "Satışı Onayla", en: "Confirm Sale" },
+  "pf.optTitle": { tr: "🪄 AI Portföy Optimizasyonu", en: "🪄 AI Portfolio Optimization" },
+  "pf.optIntro": { tr: "Modern Portföy Teorisi (Markowitz) algoritması ile portföyünüzdeki hisselerin ağırlıklarını optimize eder. Hedefinize uygun risk profilini seçin:", en: "Optimizes the weights of your holdings using Modern Portfolio Theory (Markowitz). Choose a risk profile that fits your goal:" },
+  "pf.riskProfile": { tr: "Risk Profili", en: "Risk Profile" },
+  "pf.riskLow": { tr: "Düşük Risk (Minimum Volatilite)", en: "Low Risk (Minimum Volatility)" },
+  "pf.riskMedium": { tr: "Dengeli (Maksimum Sharpe Oranı)", en: "Balanced (Maximum Sharpe Ratio)" },
+  "pf.riskHigh": { tr: "Yüksek Risk (Maksimum Getiri)", en: "High Risk (Maximum Return)" },
+  "pf.optCalculating": { tr: "Hesaplanıyor... (Bu işlem 15-20 saniye sürebilir)", en: "Calculating... (this may take 15-20 seconds)" },
+  "pf.optStart": { tr: "Optimizasyonu Başlat", en: "Start Optimization" },
+  "pf.expReturn": { tr: "Beklenen Yıllık Getiri", en: "Expected Annual Return" },
+  "pf.annualVol": { tr: "Yıllık Volatilite (Risk)", en: "Annual Volatility (Risk)" },
+  "pf.sharpe": { tr: "Sharpe Oranı", en: "Sharpe Ratio" },
+  "pf.optimalAlloc": { tr: "Optimum Dağılım", en: "Optimal Allocation" },
+  "pf.aiEval": { tr: "🤖 AI Değerlendirmesi", en: "🤖 AI Assessment" },
+
+  // Top Picks (orta-uzun + 15g ortak)
+  "tp.title": { tr: "🏆 Stratejik Seçki (Orta-Uzun Vade)", en: "🏆 Strategic Picks (Mid-Long Term)" },
+  "tp.subtitle": { tr: "100+ teknik indikatör, temel finansal veriler ve momentumu harmanlayarak \"Orta ve Uzun Vadede\" en yüksek potansiyelli hisseleri keşfedin.", en: "Discover the highest-potential mid/long-term stocks by blending 100+ technical indicators, fundamentals and momentum." },
+  "tp.pool": { tr: "Havuz", en: "Universe" },
+  "tp.pool30": { tr: "İlk 30", en: "Top 30" },
+  "tp.pool100": { tr: "İlk 100", en: "Top 100" },
+  "tp.poolAll": { tr: "Tümü (Full)", en: "All (Full)" },
+  "tp.howMany": { tr: "Kaç Hisse Önerilsin?", en: "How Many Stocks?" },
+  "tp.nStocks": { tr: "Hisse", en: "Stocks" },
+  "tp.pastScans": { tr: "Geçmiş Taramalar", en: "Past Scans" },
+  "tp.newScanOpt": { tr: "-- Yeni Tarama --", en: "-- New Scan --" },
+  "tp.scanning": { tr: "Taranıyor ⏳", en: "Scanning ⏳" },
+  "tp.startScan": { tr: "Tarama Başlat 🚀", en: "Start Scan 🚀" },
+  "tp.sendTelegram": { tr: "📤 Telegram'a Gönder", en: "📤 Send to Telegram" },
+  "tp.scanConfirm": { tr: "{n} hisselik derin tarama başlatılacak. Onaylıyor musunuz?", en: "A deep scan of {n} stocks will start. Confirm?" },
+  "tp.cancel": { tr: "İptal", en: "Cancel" },
+  "tp.confirm": { tr: "Onaylıyorum", en: "Confirm" },
+  "tp.preparing": { tr: "Hazırlanıyor...", en: "Preparing..." },
+  "tp.scanStartError": { tr: "Tarama başlatılırken hata oluştu!", en: "An error occurred while starting the scan!" },
+  "tp.scanError": { tr: "Tarama sırasında hata: ", en: "Error during scan: " },
+  "tp.scanningTitle": { tr: "Yapay Zeka Havuzu Tarıyor", en: "AI is Scanning the Universe" },
+  "tp.scanningDesc": { tr: "Bu işlem sunucu performansına bağlı olarak birkaç dakika sürebilir. Lütfen bekleyin...", en: "This may take a few minutes depending on server load. Please wait..." },
+  "tp.noScanTitle": { tr: "Henüz Tarama Yapılmadı", en: "No Scan Yet" },
+  "tp.noScanDesc": { tr: "Yeni bir tarama başlatın veya geçmiş tarihlerden birini seçin.", en: "Start a new scan or pick a past date." },
+  "tp.colRank": { tr: "Sıra", en: "Rank" },
+  "tp.colStock": { tr: "Hisse", en: "Stock" },
+  "tp.colPrice": { tr: "Fiyat ($)", en: "Price ($)" },
+  "tp.colHybrid": { tr: "🏆 V6 Hibrit Skor", en: "🏆 V6 Hybrid Score" },
+  "tp.colConfidence": { tr: "Güven Skoru", en: "Confidence Score" },
+  "tp.colWeight": { tr: "🛡️ Önerilen Ağırlık", en: "🛡️ Suggested Weight" },
+  "tp.colFundamental": { tr: "Temel Durum", en: "Fundamental Status" },
+  "tp.colDecision": { tr: "Karar Sinyali", en: "Decision Signal" },
+  "tp.colGraham": { tr: "Graham Değeri", en: "Graham Value" },
+  "tp.colAction": { tr: "İşlem", en: "Action" },
+  "tp.cardScore": { tr: "Skor", en: "Score" },
+  "tp.cardConfidence": { tr: "Güven", en: "Confidence" },
+  "tp.fundScore": { tr: "Temel Skor", en: "Fundamental Score" },
+  "tp.techScore": { tr: "Teknik Skor", en: "Technical Score" },
+
+  // Top Picks 15D ek
+  "tp15.title": { tr: "🚀 Stratejik Seçki (15 Gün)", en: "🚀 Strategic Picks (15 Days)" },
+  "tp15.subtitle": { tr: "Sadece kısa vadeli (0-15 gün) indikatörler kullanılarak \"Patlama Potansiyeli\" olan hisseler taranır.", en: "Scans for stocks with \"breakout potential\" using only short-term (0-15 day) indicators." },
+  "tp15.telegram": { tr: "Stratejik Seçki (15 GÜN)", en: "Strategic Picks (15 Days)" },
+  "tp.colSignals": { tr: "🚩 Sinyaller", en: "🚩 Signals" },
+  "tp15.chartBtn": { tr: "📈 Patlama Grafiği", en: "📈 Breakout Chart" },
+  "tp15.chartTitle": { tr: "Patlama Potansiyeli (MACD & Bollinger)", en: "Breakout Potential (MACD & Bollinger)" },
+  "tp15.chartLoading": { tr: "Yapay zeka grafiği oluşturuyor...", en: "AI is generating the chart..." },
+  "tp15.chartError": { tr: "Grafik yüklenirken hata oluştu veya hisse verisi bulunamadı.", en: "An error occurred loading the chart, or no data was found." },
+  "tp15.chartFootnote": { tr: "* Bu grafik anlık olarak yfinance üzerinden çekilen geçmiş 6 aylık veriler baz alınarak çizilmektedir. Turuncu çizgi: 20G Hareketli Ortalama. Kesik çizgiler: Bollinger Bantları.", en: "* This chart is drawn from the last 6 months of data fetched live via yfinance. Orange line: 20-day MA. Dashed lines: Bollinger Bands." },
+
+  // Admin Panel
+  "pn.title": { tr: "Admin Paneli", en: "Admin Panel" },
+  "pn.subtitle": { tr: "Sistem yönetimi, kullanıcı kontrolü ve log takibi", en: "System management, user control and log monitoring" },
+  "pn.statTotalUsers": { tr: "Toplam Kullanıcı", en: "Total Users" },
+  "pn.statActive": { tr: "Aktif Hesap", en: "Active Accounts" },
+  "pn.statAlarms": { tr: "Aktif Alarmlar", en: "Active Alerts" },
+  "pn.statOnline": { tr: "Şu An Online", en: "Online Now" },
+  "pn.statErrors": { tr: "Bugün Hata", en: "Errors Today" },
+  "pn.tabUsers": { tr: "👥 Kullanıcı Yönetimi", en: "👥 User Management" },
+  "pn.tabSessions": { tr: "🟢 Canlı Takip", en: "🟢 Live Tracking" },
+  "pn.tabLogs": { tr: "📋 Sistem Logları", en: "📋 System Logs" },
+  "pn.usersLoadError": { tr: "Kullanıcılar yüklenemedi.", en: "Could not load users." },
+  "pn.sessionsLoadError": { tr: "Oturumlar yüklenemedi.", en: "Could not load sessions." },
+  "pn.logsLoadError": { tr: "Loglar yüklenemedi.", en: "Could not load logs." },
+  "pn.settingsLoadError": { tr: "Ayarlar yüklenemedi.", en: "Could not load settings." },
+  "pn.settingsSaved": { tr: "Ayarlar kaydedildi.", en: "Settings saved." },
+  "pn.settingsSaveError": { tr: "Ayarlar kaydedilemedi.", en: "Could not save settings." },
+  "pn.updateFail": { tr: "Güncelleme başarısız.", en: "Update failed." },
+  "pn.roleFail": { tr: "Rol değiştirilemedi.", en: "Could not change role." },
+  "pn.quotaFail": { tr: "Kullanıcı kotası güncellenemedi.", en: "Could not update user quota." },
+  "pn.emailFail": { tr: "E-posta güncellenemedi.", en: "Could not update email." },
+  "pn.phoneFail": { tr: "Telefon güncellenemedi.", en: "Could not update phone." },
+  "pn.pwSuccess": { tr: "Şifre başarıyla güncellendi.", en: "Password updated successfully." },
+  "pn.pwFail": { tr: "Şifre güncellenemedi.", en: "Could not update password." },
+  "pn.pwMin": { tr: "Şifre en az 6 karakter olmalıdır.", en: "Password must be at least 6 characters." },
+  "pn.subUpdated": { tr: "Abonelik güncellendi. Yeni verileri görmek için tablo yenileniyor.", en: "Subscription updated. Refreshing the table to show new data." },
+  "pn.subFail": { tr: "Abonelik güncellenemedi.", en: "Could not update subscription." },
+  "pn.userAddFail": { tr: "Kullanıcı eklenemedi.", en: "Could not add user." },
+  "pn.promptEmail": { tr: "{u} için yeni e-posta:", en: "New email for {u}:" },
+  "pn.promptPhone": { tr: "{u} için yeni telefon:", en: "New phone for {u}:" },
+  "pn.promptPw": { tr: "{u} için yeni şifre (en az 6 karakter):", en: "New password for {u} (min 6 chars):" },
+  "pn.promptSub": { tr: "{u} için kaç GÜN eklenecek? (Örn: 30, 90, 365)", en: "How many DAYS to add for {u}? (e.g. 30, 90, 365)" },
+  "pn.promptQuota": { tr: "{u} için yeni kota:", en: "New quota for {u}:" },
+  "pn.cancelAdd": { tr: "✕ İptal", en: "✕ Cancel" },
+  "pn.addUser": { tr: "+ Yeni Kullanıcı Ekle", en: "+ Add New User" },
+  "pn.fUsername": { tr: "Kullanıcı Adı", en: "Username" },
+  "pn.fPassword": { tr: "Şifre", en: "Password" },
+  "pn.fEmailOpt": { tr: "E-posta (Opsiyonel)", en: "Email (Optional)" },
+  "pn.fRole": { tr: "Rol", en: "Role" },
+  "pn.adding": { tr: "Ekleniyor...", en: "Adding..." },
+  "pn.add": { tr: "Ekle", en: "Add" },
+  "pn.colUser": { tr: "Kullanıcı", en: "User" },
+  "pn.colEmail": { tr: "E-posta", en: "Email" },
+  "pn.colPhone": { tr: "Telefon", en: "Phone" },
+  "pn.colRole": { tr: "Rol", en: "Role" },
+  "pn.colAlarms": { tr: "Alarmlar", en: "Alerts" },
+  "pn.colQuota": { tr: "AI Kota", en: "AI Quota" },
+  "pn.colSub": { tr: "Abonelik", en: "Subscription" },
+  "pn.colLastActive": { tr: "Son Aktif", en: "Last Active" },
+  "pn.colStatus": { tr: "Durum", en: "Status" },
+  "pn.colActions": { tr: "İşlemler", en: "Actions" },
+  "pn.noUsers": { tr: "Kullanıcı bulunamadı.", en: "No users found." },
+  "pn.edit": { tr: "✏️ Düzenle", en: "✏️ Edit" },
+  "pn.expired": { tr: "Süresi Doldu", en: "Expired" },
+  "pn.daysLeft": { tr: "{n} Gün Kaldı", en: "{n} Days Left" },
+  "pn.active": { tr: "Aktif", en: "Active" },
+  "pn.suspended": { tr: "Askıda", en: "Suspended" },
+  "pn.suspend": { tr: "Askıya Al", en: "Suspend" },
+  "pn.activate": { tr: "Aktif Et", en: "Activate" },
+  "pn.makeUser": { tr: "User Yap", en: "Make User" },
+  "pn.makeAdmin": { tr: "Admin Yap", en: "Make Admin" },
+  "pn.email": { tr: "E-posta", en: "Email" },
+  "pn.phone": { tr: "Telefon", en: "Phone" },
+  "pn.password": { tr: "Şifre", en: "Password" },
+  "pn.extend": { tr: "Süre Uzat", en: "Extend" },
+  "pn.ownAccount": { tr: "Kendi hesabınız", en: "Your account" },
+  "pn.changePw": { tr: "Şifre Değiştir", en: "Change Password" },
+  "pn.sessionsDesc": { tr: "Son 15 dakika içinde aktif olan kullanıcılar", en: "Users active in the last 15 minutes" },
+  "pn.refresh": { tr: "🔄 Yenile", en: "🔄 Refresh" },
+  "pn.noSessionsTitle": { tr: "Şu an aktif kullanıcı yok", en: "No active users right now" },
+  "pn.noSessionsDesc": { tr: "Son 15 dakikada işlem yapan kimse bulunmuyor.", en: "Nobody has been active in the last 15 minutes." },
+  "pn.lastActivity": { tr: "Son aktivite", en: "Last activity" },
+  "pn.allLevels": { tr: "Tümü", en: "All" },
+  "pn.totalRecords": { tr: "Toplam: {n} kayıt", en: "Total: {n} records" },
+  "pn.colTime": { tr: "Zaman", en: "Time" },
+  "pn.colLevel": { tr: "Seviye", en: "Level" },
+  "pn.colAction": { tr: "İşlem", en: "Action" },
+  "pn.colDetail": { tr: "Detay", en: "Detail" },
+  "pn.noLogs": { tr: "Log kaydı bulunamadı.", en: "No log records found." },
+  "pn.prev": { tr: "← Önceki", en: "← Previous" },
+  "pn.next": { tr: "Sonraki →", en: "Next →" },
+  "pn.pageOf": { tr: "Sayfa {a} / {b}", en: "Page {a} / {b}" },
+
+  // AI Analyze Modal (paylaşılan)
+  "aim.title": { tr: "Yapay Zeka Broker Analizi:", en: "AI Broker Analysis:" },
+  "aim.quotaEnded": { tr: "Yapay Zeka analiz kotanız bitmiştir. Lütfen yöneticinizle iletişime geçin.", en: "Your AI analysis quota is exhausted. Please contact your administrator." },
+  "aim.genericError": { tr: "AI analizi sırasında bir hata oluştu.", en: "An error occurred during AI analysis." },
+  "aim.confirmTitle": { tr: "{t} Analiz Edilsin mi?", en: "Analyze {t}?" },
+  "aim.confirmDesc": { tr: "Yapay zeka asistanı sizin için güncel teknik verileri yorumlayacaktır.", en: "The AI assistant will interpret the latest technical data for you." },
+  "aim.remainingQuota": { tr: "Kalan Kotanız", en: "Your Remaining Quota" },
+  "aim.loading": { tr: "Yükleniyor...", en: "Loading..." },
+  "aim.decline": { tr: "Reddet", en: "Decline" },
+  "aim.confirm": { tr: "✨ Onayla", en: "✨ Confirm" },
+  "aim.preparing": { tr: "Broker Raporu Hazırlanıyor...", en: "Preparing Broker Report..." },
+  "aim.analyzing": { tr: "Piyasa koşulları ve indikatörler analiz ediliyor.", en: "Analyzing market conditions and indicators." },
+  "aim.close": { tr: "Kapat", en: "Close" },
+
+  // Ortak terimler (sayfalarda kademeli kullanım için)
+  "common.loading": { tr: "Yükleniyor...", en: "Loading..." },
+  "common.error": { tr: "Hata", en: "Error" },
+  "common.search": { tr: "Ara", en: "Search" },
+  "common.noData": { tr: "Veri yok", en: "No data" },
+  "common.price": { tr: "Fiyat", en: "Price" },
+  "common.change": { tr: "Değişim", en: "Change" },
+  "common.volume": { tr: "Hacim", en: "Volume" },
+  "common.support": { tr: "Destek", en: "Support" },
+  "common.resistance": { tr: "Direnç", en: "Resistance" },
+  "common.trend": { tr: "Trend", en: "Trend" },
+  "common.institutionalOwnership": { tr: "Kurumsal Sahiplik (%)", en: "Institutional Ownership (%)" },
+  "common.institutionalChange": { tr: "Kurumsal Değişim (%)", en: "Institutional Change (%)" },
+};
+
+/**
+ * Verilen anahtarın seçilen dildeki karşılığını döndürür.
+ * Anahtar bulunamazsa anahtarın kendisini döndürür (geliştirme kolaylığı).
+ */
+export function translate(key: string, lang: Lang): string {
+  const entry = DICT[key];
+  if (!entry) return key;
+  return entry[lang] ?? entry[DEFAULT_LANG] ?? key;
+}
+
+/** Bileşenlerde kullanım için: dil değişince otomatik yeniden render eder. */
+export function useT() {
+  const lang = useLangStore((s) => s.lang);
+  return (key: string) => translate(key, lang);
+}
+
+// ============================================================
+// Dinamik DEĞER çevirisi (backend'den gelen Türkçe değerler)
+// Karar/durum "balonları" ve tarama mesajları sunucudan Türkçe gelir;
+// signals_engine'e dokunmadan, gösterim anında EN'e eşleriz.
+// ============================================================
+
+// Tam eşleşme tablosu (emoji dahil)
+const VALUE_MAP: Record<string, string> = {
+  "GÜÇLÜ AL 🟢": "STRONG BUY 🟢", "AL 🟢": "BUY 🟢",
+  "GÜÇLÜ SAT 🔴": "STRONG SELL 🔴", "SAT 🔴": "SELL 🔴", "NÖTR ⚖️": "NEUTRAL ⚖️",
+  "Güçlü Al": "Strong Buy", "Al": "Buy", "Güçlü Sat": "Strong Sell", "Sat": "Sell", "Nötr": "Neutral",
+  "NÖTR": "NEUTRAL", "AL": "BUY", "SAT": "SELL",
+  "⚖️ Nötr / Konsolidasyon": "⚖️ Neutral / Consolidation",
+  "Kelepir 💎": "Bargain 💎", "Riskli ⚠️": "Risky ⚠️", "Temettü Verimi 🏖️": "Dividend Yield 🏖️",
+  "Normal": "Normal", "Veri Kısıtlı": "Limited Data", "Veri Yok": "No Data",
+  "Kırılım 🔥": "Breakout 🔥", "-": "-",
+  "Hata": "Error", "Veri Yetersiz": "Insufficient Data",
+};
+
+// Kısmi (substring) değişimler — bilinmeyen birleşik metinler için (örn. "10 (Güçlü)", sinyal satırları)
+const PHRASE_MAP: [string, string][] = [
+  ["GÜÇLÜ AL", "STRONG BUY"], ["GÜÇLÜ SAT", "STRONG SELL"],
+  ["Güçlü Al", "Strong Buy"], ["Güçlü Sat", "Strong Sell"],
+  ["Boğa Flaması", "Bull Flag"], ["Altın Kesişim", "Golden Cross"],
+  ["Pozitif Uyumsuzluk", "Positive Divergence"], ["Dipten Dönüş", "Bottom Reversal"],
+  ["Bant Daralması", "Band Squeeze"], ["Aşırı Satım", "Oversold"], ["Aşırı Alım", "Overbought"],
+  ["Trend Lideri", "Trend Leader"], ["Konsolidasyon", "Consolidation"],
+  ["Kırılım", "Breakout"], ["Güçlü", "Strong"], ["Zayıf", "Weak"],
+  ["Yükseliş", "Uptrend"], ["Düşüş", "Downtrend"], ["Tepki", "Bounce"], ["Bekle", "Wait"],
+  ["Nötr", "Neutral"], ["NÖTR", "NEUTRAL"], ["Potansiyel", "Potential"],
+];
+
+/** Backend'den gelen tekil değeri (karar, durum, etiket) seçili dile çevirir. */
+export function translateValue(value: any, lang: Lang): string {
+  if (value === null || value === undefined) return value;
+  const v = String(value);
+  if (lang !== "en") return v;
+  const trimmed = v.trim();
+  if (VALUE_MAP[trimmed] !== undefined) return VALUE_MAP[trimmed];
+  let out = v;
+  for (const [tr, en] of PHRASE_MAP) out = out.split(tr).join(en);
+  return out;
+}
+
+/** Tarama ilerleme metnini çevirir (free-form sunucu mesajları). */
+export function translateProgress(text: any, lang: Lang): string {
+  if (!text) return text;
+  let t = String(text);
+  if (lang !== "en") return t;
+  t = t
+    .replace("Asenkron Tarama:", "Async Scan:")
+    .replace(" incelendi...", " analyzed...")
+    .replace(" tarandı ", " scanned ")
+    .replace("Tarama başlatılıyor...", "Starting scan...")
+    .replace("Tarama Başlatılıyor...", "Starting scan...")
+    .replace("Hazırlanıyor...", "Preparing...")
+    .replace("Başlatılıyor...", "Starting...")
+    .replace("Tarama tamamlandı!", "Scan complete!")
+    .replace("Tamamlandı!", "Done!")
+    .replace("Tamamlandı", "Done")
+    .replace("Hata oluştu: ", "Error: ")
+    .replace("Hata: ", "Error: ");
+  return t;
+}
+
+/** Hook: değer çevirici (dil değişince otomatik günceller). */
+export function useTv() {
+  const lang = useLangStore((s) => s.lang);
+  return {
+    tv: (value: any) => translateValue(value, lang),
+    tp: (text: any) => translateProgress(text, lang),
+  };
+}

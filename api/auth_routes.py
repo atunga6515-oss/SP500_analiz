@@ -1,0 +1,273 @@
+from fastapi import APIRouter, HTTPException, Depends, status, Response, Request, Cookie
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from auth import verify_login, register_user, get_user_role, touch_last_active, log_action
+import os
+from limiter import limiter
+
+IS_PROD = os.getenv("ENV", "development").lower() == "production"
+
+# ── Security config ──────────────────────────────────────────────────────────
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY or SECRET_KEY == "borsa-v5-secret-key-change-in-prod":
+    raise ValueError("KRITIK GÜVENLİK HATASI: JWT_SECRET_KEY çevresel değişkeni (.env) ayarlanmamış veya varsayılan değer kullanılıyor! Lütfen güçlü bir gizli anahtar ayarlayın.")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 gün
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
+
+
+# ── Token helpers ─────────────────────────────────────────────────────────────
+class Token(BaseModel):
+    """Eski model - geriye dönüş uyumluluğu için saklanıyor."""
+    access_token: str = ""  # Cookie-only modelde boş
+    token_type: str
+    username: str
+    role: str
+
+class LoginResponse(BaseModel):
+    """Cookie-only auth model."""
+    access_token: Optional[str] = None
+    token_type: str
+    username: str
+    role: str
+
+
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+def get_current_user(request: Request, token: str = Depends(oauth2_scheme)) -> str:
+    """JWT'den kullanıcı adını çözer ve geçerliliğini denetler."""
+    # Cookie'den de token okumayı destekle
+    cookie_token = request.cookies.get("access_token")
+    actual_token = token or cookie_token
+    
+    if not actual_token:
+        raise HTTPException(status_code=401, detail="Token bulunamadı")
+
+    try:
+        payload = jwt.decode(actual_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Geçersiz token")
+            
+        # Check active status from DB
+        from database import engine
+        from sqlalchemy import text
+        from datetime import datetime
+        with engine.connect() as conn:
+            user = conn.execute(
+                text("SELECT is_active, subscription_expires_at FROM users WHERE username=:u"), {"u": username}
+            ).fetchone()
+            
+        if not user or not user[0]:
+            raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı veya hesap pasif durumda")
+            
+        # Abonelik kontrolü (Sadece eğer tarih belirlenmişse)
+        if user[1]:
+            # SQLite string dönebilir, Postgres datetime dönebilir
+            exp_date = user[1]
+            if isinstance(exp_date, str):
+                try:
+                    exp_date = datetime.fromisoformat(exp_date.replace('Z', '+00:00'))
+                    # timezone naive/aware karmaşasını önlemek için basitleştirme:
+                    exp_date = exp_date.replace(tzinfo=None)
+                except Exception:
+                    pass
+            if isinstance(exp_date, datetime):
+                if datetime.utcnow() > exp_date:
+                    raise HTTPException(status_code=403, detail="Abonelik süreniz dolmuştur.")
+
+        touch_last_active(username)
+        return username
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token doğrulanamadı",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def get_current_admin(current_user: str = Depends(get_current_user)) -> str:
+    """Kullanıcının admin rolüne sahip olduğunu doğrular."""
+    role = get_user_role(current_user)
+    if role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu işlem için admin yetkisi gereklidir.",
+        )
+    return current_user
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+@router.post("/token", response_model=LoginResponse)
+@limiter.limit("5/minute")
+def login_for_access_token(request: Request, response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
+    if not verify_login(form_data.username, form_data.password):
+        log_action(form_data.username, "LOGIN_FAIL", "Hatalı şifre", level="WARNING")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kullanıcı adı veya şifre hatalı",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    role = get_user_role(form_data.username)
+    access_token = create_access_token(data={"sub": form_data.username, "role": role})
+    log_action(form_data.username, "LOGIN", "Başarılı giriş")
+    touch_last_active(form_data.username)
+    
+    # HttpOnly Cookie ayarlama
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        secure=IS_PROD  # Prod ortamında True (HTTPS zorunlu)
+    )
+    
+    # Cookie-only auth modu: Token sadece HttpOnly cookie'de saklanır.
+    # Body'de token dönmek XSS riskini artırır (localStorage'a yazılabilir).
+    return {
+        "access_token": None,
+        "token_type": "bearer",
+        "username": form_data.username,
+        "role": role,
+    }
+
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    # Token'ı cookie veya header'dan manuel okuyup hata fırlatmadan işlem yapalım.
+    cookie_token = request.cookies.get("access_token")
+    auth_header = request.headers.get("Authorization")
+    actual_token = cookie_token
+    if not actual_token and auth_header and auth_header.startswith("Bearer "):
+        actual_token = auth_header.split(" ")[1]
+        
+    if actual_token:
+        try:
+            payload = jwt.decode(actual_token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = payload.get("sub")
+            if username:
+                log_action(username, "LOGOFF", "Başarılı çıkış")
+                # Kullanıcıyı hemen offline göstermek için son aktiviteyi eskiye çek
+                from database import engine
+                from sqlalchemy import text
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE users SET last_active = '2000-01-01 00:00:00' WHERE username = :u"),
+                        {"u": username}
+                    )
+        except Exception:
+            pass # Geçersiz/Süresi dolmuş token olsa da cookie'yi silmeye devam et
+
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+        secure=IS_PROD
+    )
+    return {"status": "success"}
+
+
+@router.get("/me")
+def read_users_me(current_user: str = Depends(get_current_user)):
+    from auth import get_user_role, get_user_quota
+    role = get_user_role(current_user)
+    quota = get_user_quota(current_user)
+    return {"username": current_user, "role": role, "ai_quota": quota}
+
+
+class UpdateTelegramRequest(BaseModel):
+    chat_id: str
+
+@router.post("/telegram-id")
+def update_telegram_id(req: UpdateTelegramRequest, current_user: str = Depends(get_current_user)):
+    from database import engine
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE users SET telegram_chat_id = :chat_id WHERE username = :u"
+        ), {"chat_id": req.chat_id, "u": current_user})
+    return {"status": "success", "message": "Telegram Chat ID kaydedildi!"}
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = ""
+
+
+@router.post("/register")
+def register(req: RegisterRequest, current_user: str = Depends(get_current_user)):
+    role = get_user_role(current_user)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Sadece admin yetkisine sahip kullanıcılar yeni kayıt oluşturabilir.")
+    
+    result = register_user(req.username, req.password, req.email or "")
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    
+    return {
+        "status": "success",
+        "message": f"{req.username} başarıyla oluşturuldu."
+    }
+
+import smtplib
+from email.message import EmailMessage
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+
+@router.post("/contact-admin")
+@limiter.limit("3/minute")
+def contact_admin(request: Request, req: ContactRequest):
+    admin_email = os.getenv("ADMIN_EMAIL", "").strip()
+    smtp_server = os.getenv("SMTP_SERVER", "").strip()
+    smtp_port = os.getenv("SMTP_PORT", "587").strip()
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
+    
+    # Şifre içindeki olası görünmez/normal boşlukları temizle (Google App Password için kritik)
+    smtp_pass = smtp_pass.replace('\xa0', '').replace(' ', '')
+    smtp_user = smtp_user.replace('\xa0', '').replace(' ', '')
+
+    if not all([admin_email, smtp_server, smtp_user, smtp_pass]):
+        print("WARNING: SMTP_SERVER vb. .env ayarları eksik. Mail gönderilmedi, ancak form başarılı sayıldı.")
+        return {"status": "success", "warning": "SMTP_NOT_CONFIGURED"}
+
+    try:
+        msg = EmailMessage()
+        
+        # Sadece ASCII karakterler kullan (Subject için)
+        safe_name = req.name.encode('ascii', 'ignore').decode('ascii')
+        msg['Subject'] = f"AlfaBIST Terminal - Yeni Iletisim Talebi ({safe_name})"
+        msg['From'] = smtp_user
+        msg['To'] = admin_email
+        
+        body = f"Yeni bir iletisim / demo talebi aldiniz:\n\nAd Soyad: {req.name}\nE-posta: {req.email}\n\nMesaj:\n{req.message}\n"
+        
+        # Body içindeki görünmez boşlukları normal boşluğa çevir
+        body = body.replace('\xa0', ' ')
+        msg.set_content(body)
+
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        return {"status": "success"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Mail gönderme hatası: {e}")
+        raise HTTPException(status_code=500, detail="Mail gönderilirken hata oluştu.")

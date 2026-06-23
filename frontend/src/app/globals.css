@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@theme {
+  --color-b-bg: #0b0e11;
+  --color-b-panel: #181a20;
+  --color-b-panel-hover: #2b3139;
+  --color-b-border: #2b3139;
+  --color-b-text: #eaecef;
+  --color-b-muted: #848e9c;
+  --color-b-green: #0ecb81;
+  --color-b-red: #f6465d;
+  --color-b-yellow: #fcd535;
+}
+
+body {
+  background-color: var(--color-b-bg);
+  color: var(--color-b-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.glass-panel {
+  background: rgba(24, 26, 32, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-b-border);
+  border-radius: 0.75rem;
+}
+
+.glass-header {
+  background: rgba(11, 14, 17, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-b-border);
+}
+
+.text-positive {
+  color: var(--color-b-green);
+}
+
+.text-negative {
+  color: var(--color-b-red);
+}
+
+.bg-positive {
+  background-color: var(--color-b-green);
+}
+
+.bg-negative {
+  background-color: var(--color-b-red);
+}
+
+/* Custom Scrollbar for terminal feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-b-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-b-muted);
+}
+
+/* Screener progress bar animation */
+@keyframes progress-bar-stripes {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Anında açılan tooltip — Pro Terminal balon stili (native 'title' gecikmesini önler) */
+.tip { position: relative; }
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  white-space: pre-line;
+  width: max-content;
+  min-width: 200px;
+  max-width: 280px;
+  background: #1c2030;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+/* Yukarı bakan küçük ok (Pro Terminal tarzı) */
+.tip::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 3px;
+  border: 5px solid transparent;
+  border-bottom-color: #1c2030;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 201;
+}
+.tip:hover::after, .tip:hover::before { opacity: 1; visibility: visible; }  /* gecikmesiz */
+/* data-tip boşsa balon gösterme */
+.tip[data-tip=""]::after, .tip[data-tip=""]::before,
+.tip:not([data-tip])::after, .tip:not([data-tip])::before { display: none; }

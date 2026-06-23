@@ -1,0 +1,243 @@
+"use client";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import api from "@/lib/api";
+import { useT, useLang, SUPPORTED_LANGS, type Lang } from "@/lib/i18n";
+
+const NAV_GROUPS = [
+    {
+        titleKey: "nav.group.market",
+        links: [
+            { href: "/markets", labelKey: "nav.markets", icon: "📊", tipKey: "tip.markets" },
+            { href: "/heatmap", labelKey: "nav.heatmap", icon: "🗺️", tipKey: "tip.heatmap" },
+            { href: "/kap", labelKey: "nav.kap", icon: "📰", tipKey: "tip.kap" },
+        ]
+    },
+    {
+        titleKey: "nav.group.scan",
+        links: [
+            { href: "/screener", labelKey: "nav.screener", icon: "⚡", tipKey: "tip.screener" },
+            { href: "/top-picks-15d", labelKey: "nav.topPicks15d", icon: "🚀", tipKey: "tip.topPicks15d" },
+            { href: "/top-picks", labelKey: "nav.topPicks", icon: "🎯", tipKey: "tip.topPicks" },
+            { href: "/alpharank", labelKey: "nav.alpharank", icon: "📈", tipKey: "tip.alpharank" },
+        ]
+    },
+    {
+        titleKey: "nav.group.deep",
+        links: [
+            { href: "/analysis", labelKey: "nav.analysis", icon: "🔬", tipKey: "tip.analysis" },
+            { href: "/indicators", labelKey: "nav.indicators", icon: "📈", tipKey: "tip.indicators" },
+            { href: "/backtest", labelKey: "nav.backtest", icon: "⚙️", tipKey: "tip.backtest" },
+            { href: "/strategy-compare", labelKey: "nav.strategyCompare", icon: "🧪", tipKey: "tip.strategyCompare" },
+            { href: "/karne", labelKey: "nav.karne", icon: "🏅", tipKey: "tip.karne" },
+            { href: "/robot", labelKey: "nav.robot", icon: "🤖", tipKey: "tip.robot" },
+            { href: "/risk", labelKey: "nav.risk", icon: "⚠️", tipKey: "tip.risk" },
+            { href: "/smc", labelKey: "nav.smc", icon: "📐", tipKey: "tip.smc" },
+        ]
+    },
+    {
+        titleKey: "nav.group.account",
+        links: [
+            { href: "/portfolio", labelKey: "nav.portfolio", icon: "💼", tipKey: "tip.portfolio" },
+            { href: "/alarms", labelKey: "nav.alarms", icon: "🔔", tipKey: "tip.alarms" },
+        ]
+    }
+];
+
+export default function NavBar() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const t = useT();
+    const { lang, setLang } = useLang();
+    const [username, setUsername] = useState<string | null>(null);
+    const [role, setRole] = useState<string | null>(null);
+    const [aiQuota, setAiQuota] = useState<number | null>(null);
+    const [isMounted, setIsMounted] = useState<boolean>(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+        // UI titremesini (flash) engellemek için önce önbellekten oku
+        const cachedUser = localStorage.getItem("username");
+        const cachedRole = localStorage.getItem("role");
+        if (cachedUser) setUsername(cachedUser);
+        if (cachedRole) setRole(cachedRole);
+
+        // Cookie-based auth: /auth/me ile username, rol ve kota arka planda senkronize edilir
+        api.get('/auth/me')
+            .then(res => {
+                if (res.data) {
+                    setUsername(res.data.username || null);
+                    setRole(res.data.role || null);
+                    setAiQuota(res.data.ai_quota ?? null);
+                    // localStorage'ı UI ön belleği olarak güncelle
+                    if (res.data.username) localStorage.setItem("username", res.data.username);
+                    if (res.data.role) localStorage.setItem("role", res.data.role);
+                }
+            })
+            .catch(() => {
+                // Cookie/Token geçersiz/süresi dolmuş — NavBar'da giriş yap göster
+                setUsername(null);
+                setRole(null);
+                setAiQuota(null);
+                localStorage.removeItem("token");
+                localStorage.removeItem("username");
+                localStorage.removeItem("role");
+            });
+    }, [pathname]);
+
+    const handleLogout = async () => {
+        try {
+            await api.post("/auth/logout");
+        } catch (e) {
+            console.error("Logout error", e);
+        }
+        
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("role");
+
+        setUsername(null);
+        setRole(null);
+        setAiQuota(null);
+        router.push("/");
+    };
+
+    const isAuthPage = pathname === "/login" || pathname === "/register";
+    if (isAuthPage) return null;
+
+    return (
+        <header className="glass-header h-16 flex items-center px-6 sticky top-0 z-50 justify-between">
+            <div className="flex items-center gap-8">
+                <Link href="/" className="flex items-center gap-2 cursor-pointer group">
+                    <div className="w-8 h-8 rounded bg-gradient-to-br from-[var(--color-b-yellow)] to-yellow-600 flex items-center justify-center font-bold text-[#181a20] group-hover:scale-105 transition-transform text-lg shadow-[0_0_15px_rgba(240,201,41,0.3)]">
+                        α
+                    </div>
+                    <span className="text-xl font-extrabold text-white tracking-tight group-hover:text-[var(--color-b-yellow)] transition-colors">
+                        Alfa<span className="text-[var(--color-b-yellow)] font-normal">{t("brand.suffix")}</span>
+                    </span>
+                </Link>
+                <nav className="hidden md:flex gap-4 items-center">
+                    {NAV_GROUPS.map((group, gIdx) => {
+                        const isGroupActive = group.links.some(link => pathname === link.href);
+                        return (
+                            <div key={gIdx} className="group/dropdown relative h-16 flex items-center">
+                                {/* Dropdown Header */}
+                                <button className={`flex items-center gap-1.5 px-3 py-2 rounded text-sm font-semibold transition-colors ${
+                                    isGroupActive ? "text-[var(--color-b-yellow)]" : "text-[var(--color-b-muted)] hover:text-white"
+                                }`}>
+                                    {t(group.titleKey)}
+                                    <span className="text-[10px] opacity-50 group-hover/dropdown:rotate-180 transition-transform duration-200">▼</span>
+                                </button>
+
+                                {/* Dropdown Menu */}
+                                <div className="absolute top-[60px] left-0 w-56 p-2 bg-[#1e2329] border border-[var(--color-b-border)] rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.8)] opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-[100] transform translate-y-2 group-hover/dropdown:translate-y-0">
+                                    {group.links.map((link) => {
+                                        const isActive = pathname === link.href;
+                                        return (
+                                            <Link
+                                                key={link.href}
+                                                href={link.href}
+                                                className={`group/link relative flex items-center gap-2.5 px-3 py-2.5 rounded text-sm font-medium transition-colors ${
+                                                    isActive
+                                                        ? "bg-[var(--color-b-panel)] text-[var(--color-b-yellow)]"
+                                                        : "text-[var(--color-b-muted)] hover:bg-[#2b3139] hover:text-white"
+                                                }`}
+                                            >
+                                                <span className="text-lg">{link.icon}</span>
+                                                <span>{t(link.labelKey)}</span>
+                                                
+                                                {/* Modern Hover Card (Opens to the right side of the dropdown) */}
+                                                <div className="absolute top-0 left-full ml-3 w-64 p-3 bg-[#1e2329]/95 backdrop-blur-xl border border-[var(--color-b-border)] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 invisible group-hover/link:opacity-100 group-hover/link:visible transition-all duration-300 z-[110] pointer-events-none transform translate-x-2 group-hover/link:translate-x-0">
+                                                    {/* Sol taraftaki küçük ok (triangle) */}
+                                                    <div className="absolute top-3 -left-2 border-[6px] border-transparent border-r-[#1e2329]/95"></div>
+                                                    
+                                                    <div className="flex items-center gap-2 mb-1.5 border-b border-[#2b3139] pb-1.5">
+                                                        <span className="text-xl">{link.icon}</span>
+                                                        <h4 className="text-white font-bold text-sm tracking-wide">{t(link.labelKey)}</h4>
+                                                    </div>
+                                                    <p className="text-xs text-gray-300 leading-relaxed whitespace-normal">
+                                                        {t(link.tipKey)}
+                                                    </p>
+                                                </div>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {role === "admin" && (
+                        <a
+                            href="/panel"
+                            className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-bold transition-colors ${
+                                pathname.startsWith("/panel")
+                                    ? "bg-purple-900/60 border border-purple-500 text-purple-300"
+                                    : "border border-transparent text-purple-400 hover:bg-purple-900/30 hover:border-purple-700 hover:text-purple-300"
+                            }`}
+                        >
+                            <span>⚙️</span>
+                            <span>{t("navbar.admin")}</span>
+                        </a>
+                    )}
+                </nav>
+            </div>
+            <div className="flex items-center gap-3">
+                {/* Dil Seçici (TR / EN) */}
+                <div className="flex items-center rounded-full border border-[var(--color-b-border)] overflow-hidden text-xs font-bold" title={t("navbar.language")}>
+                    {SUPPORTED_LANGS.map((lng: Lang) => (
+                        <button
+                            key={lng}
+                            onClick={() => setLang(lng)}
+                            className={`px-2.5 py-1 transition-colors ${
+                                lang === lng
+                                    ? "bg-[var(--color-b-yellow)] text-[#181a20]"
+                                    : "text-[var(--color-b-muted)] hover:text-white"
+                            }`}
+                        >
+                            {lng.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+                {!isMounted ? (
+                    <div className="w-24 h-8 animate-pulse bg-gray-800/50 rounded"></div>
+                ) : username ? (
+                    <>
+                        {aiQuota !== null && (
+                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-900/30 border border-blue-700/50 text-blue-300 text-xs font-bold cursor-help" title={t("navbar.aiCredits")}>
+                                <span>🤖</span>
+                                <span>AI: {aiQuota}</span>
+                            </div>
+                        )}
+                        {role === "admin" && (
+                            <a
+                                href="/panel"
+                                className="hidden sm:flex text-sm items-center gap-1 px-3 py-1.5 rounded bg-purple-900/30 border border-purple-600/50 text-purple-300 hover:bg-purple-900/60 hover:text-white transition-colors"
+                            >
+                                ⚙️ <span className="font-semibold">{t("navbar.adminPanel")}</span>
+                            </a>
+                        )}
+                        <span className="text-[var(--color-b-muted)] text-sm hidden sm:inline">
+                            👤 <span className="text-white font-semibold">{username}</span>
+                        </span>
+                        <button
+                            onClick={handleLogout}
+                            className="text-sm px-3 py-1.5 rounded border border-[var(--color-b-border)] text-[var(--color-b-muted)] hover:border-red-500 hover:text-red-400 transition-colors"
+                        >
+                            {t("navbar.logout")}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <Link
+                            href="/login"
+                            className="bg-[var(--color-b-yellow)] text-[#181a20] px-4 py-1.5 rounded font-semibold text-sm hover:bg-[#f0c929] transition-colors"
+                        >
+                            {t("navbar.login")}
+                        </Link>
+                    </>
+                )}
+            </div>
+        </header>
+    );
+}
