@@ -8,10 +8,12 @@ import SymbolAutocomplete from "@/components/SymbolAutocomplete";
 import toast from 'react-hot-toast';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useT, useTv } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 function AnalysisPageContent() {
     const t = useT();
     const { tv } = useTv();
+    const nameOf = useSymbolNames();
     const { requireAuth, AuthModal } = useRequireAuth();
     const [ticker, setTicker] = useState("");
     const [data, setData] = useState<any>(null);
@@ -177,7 +179,12 @@ ${ssot.summary || "-"}`;
                         {/* Premium Card */}
                         <div className="glass-panel p-6 rounded-lg border border-[var(--color-b-border)] bg-gradient-to-br from-[#1e2329] to-[#0d1117]">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="text-3xl font-black text-white">{data.ticker}</div>
+                                <div>
+                                    <div className="text-3xl font-black text-white">{data.ticker}</div>
+                                    {nameOf(data.ticker) && (
+                                        <div className="text-sm font-normal text-[var(--color-b-muted)]">{nameOf(data.ticker)}</div>
+                                    )}
+                                </div>
                                 <div className="text-2xl font-bold text-white">${data.current_price?.toFixed(2)}</div>
                             </div>
 

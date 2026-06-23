@@ -7,11 +7,13 @@ import AIAnalyzeModal from "../components/AIAnalyzeModal";
 import toast from 'react-hot-toast';
 import { addTickerToWatchlist } from "@/lib/watchlist";
 import { useT, useTv } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 export default function ScreenerPage() {
     const router = useRouter();
     const t = useT();
     const { tv, tp } = useTv();
+    const nameOf = useSymbolNames();
     const { requireAuth, AuthModal } = useRequireAuth();
     const [scanResults, setScanResults] = useState<any[]>([]);
     const [scanning, setScanning] = useState(false);
@@ -390,7 +392,12 @@ export default function ScreenerPage() {
                                 const score = row["Ensemble Güven Skoru"] || "-";
                                 return (
                                 <tr key={i} className="hover:bg-[#1e2329] transition-colors border-b border-[var(--color-b-border)]">
-                                    <td className="p-4 font-bold text-white text-lg">{row["Hisse"]}</td>
+                                    <td className="p-4 font-bold text-white text-lg">
+                                        {row["Hisse"]}
+                                        {nameOf(row["Hisse"]) && (
+                                            <div className="text-xs font-normal text-[var(--color-b-muted)] mt-0.5 truncate max-w-[180px]">{nameOf(row["Hisse"])}</div>
+                                        )}
+                                    </td>
                                     <td className="p-4 font-bold">
                                         <span className={`px-3 py-1 rounded text-sm ${
                                             signal.toLowerCase().includes("güçlü al") ? "bg-[var(--color-b-green)] text-black" :

@@ -28,20 +28,15 @@ def update_bist_symbols():
 
     symbols_data = []
 
-    def fetch_name(sym):
-        try:
-            ticker = yf.Ticker(sym.upper().strip().replace(".", "-"))
-            info = ticker.info
-            name = info.get("longName") or info.get("shortName") or sym
-            return {"symbol": sym, "name": name}
-        except Exception as e:
-            # Hata olursa en azından symbol adını isim olarak koy
-            return {"symbol": sym, "name": sym}
+    # Şirket adları statik S&P 500 sözlüğünden gelir (hızlı, yfinance'e gerek yok)
+    try:
+        from sp500_symbols import SP500_NAMES
+    except ImportError:
+        SP500_NAMES = {}
 
-    # Hızlı çekim için ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        results = list(executor.map(fetch_name, BIST_ALL_SYMBOLS))
-        symbols_data.extend(results)
+    for sym in BIST_ALL_SYMBOLS:
+        name = SP500_NAMES.get(sym.upper().replace(".", "-"), sym)
+        symbols_data.append({"symbol": sym, "name": name})
 
     logger.info(f"{len(symbols_data)} hisse ismi yfinance üzerinden çekildi. Veritabanına yazılıyor...")
 

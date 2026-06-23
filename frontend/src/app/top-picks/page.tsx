@@ -6,10 +6,12 @@ import AIAnalyzeModal from "../components/AIAnalyzeModal";
 import toast from 'react-hot-toast';
 import { addTickerToWatchlist } from "@/lib/watchlist";
 import { useT, useTv } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 export default function TopPicksPage() {
     const t = useT();
     const { tv, tp } = useTv();
+    const nameOf = useSymbolNames();
     const { requireAuth, AuthModal } = useRequireAuth();
     const [picks, setPicks] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -368,6 +370,9 @@ export default function TopPicksPage() {
                                         <td className="p-4 font-bold text-xl">{medal}</td>
                                         <td className="p-4 font-bold text-[var(--color-b-yellow)] text-lg">
                                             {tckr}
+                                            {nameOf(tckr) && (
+                                                <div className="text-xs text-white font-normal truncate max-w-[180px]">{nameOf(tckr)}</div>
+                                            )}
                                             <div className="text-xs text-[var(--color-b-muted)] font-normal">{row.sektor || "-"}</div>
                                         </td>
                                         <td className="p-4 text-white font-medium">

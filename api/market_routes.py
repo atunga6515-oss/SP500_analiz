@@ -134,24 +134,13 @@ def fetch_macro_calendar(current_user: str = Depends(get_current_user)):
 @router.get("/symbols")
 def get_symbols(current_user: str = Depends(get_current_user)):
     """
-    Tüm BIST hisselerinin sembollerini ve uzun adlarını döner (bist_symbols tablosundan).
-    Eğer tablo boşsa screener.py'daki listeyi fallback olarak kullanır.
+    Tüm S&P 500 hisselerinin sembollerini ve şirket adlarını döner.
+    Statik sp500_symbols listesinden gelir (DB'ye bağımlı değil; isimler hep dolu).
     """
-    from database import engine
-    from sqlalchemy import text
     try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("SELECT symbol, name FROM bist_symbols ORDER BY symbol ASC")).fetchall()
-            
-        if rows:
-            return {"symbols": [{"symbol": r[0], "name": r[1]} for r in rows]}
-            
-        # Fallback (eğer henüz schedule çalışmadıysa)
-        from screener import BIST_ALL_SYMBOLS
-        return {"symbols": [{"symbol": sym, "name": sym} for sym in sorted(list(set(BIST_ALL_SYMBOLS)))]}
-        
+        from sp500_symbols import get_symbols_with_names
+        return {"symbols": get_symbols_with_names()}
     except Exception as e:
         print("Error fetching symbols:", e)
-        # Tablo yoksa vs fallback
-        from screener import BIST_ALL_SYMBOLS
-        return {"symbols": [{"symbol": sym, "name": sym} for sym in sorted(list(set(BIST_ALL_SYMBOLS)))]}
+        from sp500_symbols import SP500_ALL
+        return {"symbols": [{"symbol": sym, "name": sym} for sym in sorted(SP500_ALL)]}

@@ -5,9 +5,11 @@ import api from "@/lib/api";
 import SymbolAutocomplete from "@/components/SymbolAutocomplete";
 import toast from 'react-hot-toast';
 import { useT } from "@/lib/i18n";
+import { useSymbolNames } from "@/lib/symbolNames";
 
 export default function Home() {
     const t = useT();
+    const nameOf = useSymbolNames();
     const [chartData, setChartData] = useState([]);
 
     // Read initial ticker from URL if present (e.g. from Screener Incele button)
@@ -265,7 +267,7 @@ export default function Home() {
                                             <button onClick={(e) => removeTicker(sym, e)} className="text-[var(--color-b-red)] opacity-0 group-hover:opacity-100 transition-opacity text-xs">x</button>
                                         )}
                                     </div>
-                                    <span className="text-xs text-[var(--color-b-muted)]">{t("markets.marketTag")}</span>
+                                    <span className="text-xs text-[var(--color-b-muted)] truncate max-w-[150px]">{nameOf(sym) || t("markets.marketTag")}</span>
                                 </div>
                                 <div className="flex flex-col items-end pointer-events-none">
                                     <span className="font-medium text-white text-sm">
@@ -286,7 +288,7 @@ export default function Home() {
                 {/* Upper Info Bar */}
                 <div className="glass-panel p-4 flex items-center gap-8">
                     <div>
-                        <h2 className="text-2xl font-bold text-white">{selectedTicker} <span className="text-sm font-normal text-[var(--color-b-muted)]">{t("markets.stockLabel")}</span></h2>
+                        <h2 className="text-2xl font-bold text-white">{selectedTicker} <span className="text-sm font-normal text-[var(--color-b-muted)]">{nameOf(selectedTicker) || t("markets.stockLabel")}</span></h2>
                     </div>
                     <div className="flex flex-col">
                         <span className="text-xs text-[var(--color-b-muted)] uppercase tracking-wider font-semibold mb-1">{t("markets.livePrice")}</span>
