@@ -299,19 +299,19 @@ export default function AdminPage() {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-4 border-b border-[var(--color-b-border)] overflow-x-auto whitespace-nowrap pb-2">
-                {(["users", "sessions", "logs"] as const).map((t) => {
+                {(["users", "sessions", "logs"] as const).map((tabKey) => {
                     const labels = { users: t("pn.tabUsers"), sessions: t("pn.tabSessions"), logs: t("pn.tabLogs") };
                     return (
                         <button
-                            key={t}
-                            onClick={() => setTab(t)}
+                            key={tabKey}
+                            onClick={() => setTab(tabKey)}
                             className={`px-5 py-2.5 text-sm font-semibold rounded-t transition-colors -mb-px border-b-2 ${
-                                tab === t
+                                tab === tabKey
                                     ? "border-purple-500 text-purple-300"
                                     : "border-transparent text-[var(--color-b-muted)] hover:text-white"
                             }`}
                         >
-                            {labels[t]}
+                            {labels[tabKey]}
                         </button>
                     );
                 })}
