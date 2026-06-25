@@ -97,6 +97,9 @@ def calculate_indicators(df: pd.DataFrame, ticker: str = None) -> pd.DataFrame:
         df = calculate_100_indicators(df)
 
         if ticker:
+            # Bellek sınırı: çok büyürse en eski kaydı at (500+ sembol taramasında şişmeyi önler)
+            if len(_CACHE_INDICATORS) > 600:
+                _CACHE_INDICATORS.pop(next(iter(_CACHE_INDICATORS)), None)
             _CACHE_INDICATORS[ticker] = (df.copy(), df.index[-1])
 
         return df
