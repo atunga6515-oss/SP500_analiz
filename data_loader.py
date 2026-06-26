@@ -9,6 +9,7 @@ import pytz
 from cache_utils import ttl_cache
 from database import engine
 from sqlalchemy import text
+import alpaca_client  # Hibrit: canlı fiyat Alpaca (IEX), barlar yfinance
 # Timezone Ayarı (S&P 500 / ABD piyasası — New York seansı)
 TR_TZ = pytz.timezone("America/New_York")
 
@@ -361,8 +362,18 @@ def auto_cleanup_db(days: int = 30):
         pass
 
 def get_live_price(symbol: str) -> float:
-    """Veritabanını (Cache) tamamen pas geçip, yfinance üzerinden anlık en son fiyatı çeker."""
+    """Anlık en son fiyat. Önce Alpaca (IEX), bulunamazsa yfinance yedek."""
     ticker = _make_ticker(symbol)
+
+    # HİBRİT: Alpaca canlı fiyat (endeks değilse)
+    if alpaca_client.is_enabled() and not alpaca_client.is_index(ticker):
+        try:
+            p = alpaca_client.get_latest_price(ticker)
+            if p and p > 0:
+                return float(p)
+        except Exception:
+            pass  # yfinance yedeğe düş
+
     session = _get_yf_session()
     
     def _safe_get(p, iv):
@@ -400,8 +411,23 @@ def get_live_price(symbol: str) -> float:
         return 0.0
 
 def get_live_price_with_change(symbol: str) -> tuple:
-    """Anlık fiyatı ve dünkü kapanışa göre değişim miktarını döndürür. (Fiyat, Değişim)"""
+    """Anlık fiyatı ve dünkü kapanışa göre değişim miktarını döndürür. (Fiyat, Değişim)
+    Önce Alpaca (IEX), bulunamazsa yfinance yedek."""
     ticker = _make_ticker(symbol)
+
+    # HİBRİT: Alpaca canlı fiyat (endeks değilse)
+    if alpaca_client.is_enabled() and not alpaca_client.is_index(ticker):
+        try:
+            snap = alpaca_client.get_snapshots([ticker]).get(ticker)
+            if snap and snap.get("price"):
+                price = float(snap["price"])
+                pct = float(snap.get("change", 0.0))
+                # Yüzdeden mutlak değişime: prev = price / (1 + pct/100)
+                change_abs = price - (price / (1 + pct / 100.0)) if pct else 0.0
+                return price, round(change_abs, 2)
+        except Exception:
+            pass
+
     session = _get_yf_session()
     try:
         data = yf.download(ticker, period="5d", interval="1d", progress=False, group_by="ticker", auto_adjust=False, repair=True, session=session)
@@ -430,10 +456,40 @@ def get_live_price_with_change(symbol: str) -> tuple:
 
 @ttl_cache(ttl_seconds=60)
 def get_batch_live_prices(symbols: list) -> dict:
-    """Tüm modüller için Tek Bir Doğruluk Kaynağı (SSOT) anlık fiyatlar ve günlük değişimler."""
+    """SSOT anlık fiyatlar. HİBRİT: Alpaca (IEX) birincil; eksik/endeks/hata olanlar yfinance yedek."""
+    if not symbols:
+        return {}
+    results: dict = {}
+    remaining = list(symbols)
+
+    if alpaca_client.is_enabled():
+        try:
+            snaps = alpaca_client.get_snapshots(symbols)
+            for sym, info in snaps.items():
+                results[sym] = info
+            remaining = [s for s in symbols if s not in results]
+        except Exception:
+            remaining = list(symbols)
+
+    # Kalanlar (endeksler + Alpaca'da bulunamayanlar) -> yfinance yedek
+    if remaining:
+        try:
+            for sym, info in _yf_batch_live_prices(remaining).items():
+                results[sym] = info
+        except Exception:
+            pass
+
+    # Hâlâ eksik kalanlar için boş kayıt
+    for sym in symbols:
+        results.setdefault(sym, {"price": 0.0, "change": 0.0, "volume": 0.0})
+    return results
+
+
+def _yf_batch_live_prices(symbols: list) -> dict:
+    """yfinance ile toplu anlık fiyat (yedek kaynak)."""
     results = {}
     if not symbols: return results
-    
+
     tickers_str = " ".join([_make_ticker(s) for s in symbols])
     session = _get_yf_session()
     

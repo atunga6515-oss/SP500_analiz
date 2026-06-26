@@ -232,15 +232,26 @@ def get_layered_data(ticker: str, current_user: str = Depends(get_current_user))
         for i in range(len(df)):
             bb_list.append({"time": int(timestamps[i]), "upper": float(bb[bb_upper_col].iloc[i]) if bb is not None and not pd.isna(bb[bb_upper_col].iloc[i]) else None, "lower": float(bb[bb_lower_col].iloc[i]) if bb is not None and not pd.isna(bb[bb_lower_col].iloc[i]) else None})
 
-        # Fetch current quote for frontend display
+        # Anlık fiyat (frontend için). HİBRİT: Alpaca (IEX) birincil, yfinance yedek.
+        quote_data = None
         try:
-            fast_info = yf.Ticker(yf_ticker).fast_info
-            last_price = float(fast_info.last_price)
-            prev_close = float(fast_info.previous_close)
-            change_pct = ((last_price - prev_close) / prev_close) * 100 if prev_close else 0.0
-            quote_data = {"price": last_price, "change_pct": change_pct}
+            import alpaca_client
+            if alpaca_client.is_enabled() and not alpaca_client.is_index(yf_ticker):
+                snap = alpaca_client.get_snapshots([yf_ticker]).get(yf_ticker)
+                if snap and snap.get("price"):
+                    quote_data = {"price": float(snap["price"]), "change_pct": float(snap.get("change", 0.0))}
         except Exception:
-            quote_data = {"price": float(df['Close'].iloc[-1]), "change_pct": 0.0}
+            quote_data = None
+
+        if quote_data is None:
+            try:
+                fast_info = yf.Ticker(yf_ticker).fast_info
+                last_price = float(fast_info.last_price)
+                prev_close = float(fast_info.previous_close)
+                change_pct = ((last_price - prev_close) / prev_close) * 100 if prev_close else 0.0
+                quote_data = {"price": last_price, "change_pct": change_pct}
+            except Exception:
+                quote_data = {"price": float(df['Close'].iloc[-1]), "change_pct": 0.0}
 
         return {
             "status": "success", "ticker": ticker, "candles": candles, "poc_price": poc_price_level,
