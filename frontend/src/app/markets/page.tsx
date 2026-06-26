@@ -6,6 +6,7 @@ import SymbolAutocomplete from "@/components/SymbolAutocomplete";
 import toast from 'react-hot-toast';
 import { useT } from "@/lib/i18n";
 import { useSymbolNames } from "@/lib/symbolNames";
+import DataSourceBadge from "@/components/DataSourceBadge";
 
 export default function Home() {
     const t = useT();
@@ -302,6 +303,7 @@ export default function Home() {
                             {currentPriceInfo ? (currentPriceInfo.change !== 0 ? `${changePrefix}${currentPriceInfo.change.toFixed(2)}%` : "0.00%") : "--"}
                         </span>
                     </div>
+                    <div className="ml-auto"><DataSourceBadge /></div>
                 </div>
 
                 {/* Chart Area */}

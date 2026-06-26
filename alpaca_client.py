@@ -19,10 +19,14 @@ Notlar:
 """
 
 import os
+import time
 import logging
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Sağlık kontrolü cache'i (her istekte Alpaca'ya ping atmamak için 60 sn)
+_health = {"ts": 0.0, "ok": False, "checked": False}
 
 _BASE = "https://data.alpaca.markets/v2/stocks/snapshots"
 _TIMEOUT = 8
@@ -135,3 +139,26 @@ def get_latest_price(symbol: str) -> float:
     snaps = get_snapshots([symbol])
     info = snaps.get(symbol)
     return float(info["price"]) if info and info.get("price") else 0.0
+
+
+def health(force: bool = False) -> dict:
+    """
+    Alpaca canlı fiyat servisinin GERÇEKTEN çalışıp çalışmadığını döndürür.
+    AAPL için tek bir snapshot çekip doğrular; sonucu 60 sn cache'ler.
+    """
+    configured = is_enabled()
+    if not configured:
+        return {"configured": False, "ok": False, "feed": _feed(), "provider": _provider()}
+
+    now = time.time()
+    if not force and _health["checked"] and (now - _health["ts"] < 60):
+        return {"configured": True, "ok": _health["ok"], "feed": _feed(), "provider": _provider()}
+
+    ok = False
+    try:
+        snaps = get_snapshots(["AAPL"])
+        ok = bool(snaps.get("AAPL", {}).get("price"))
+    except Exception:
+        ok = False
+    _health.update({"ts": now, "ok": ok, "checked": True})
+    return {"configured": True, "ok": ok, "feed": _feed(), "provider": _provider()}

@@ -857,6 +857,13 @@ const DICT: Dict = {
   "authreq.register": { tr: "Hesap Oluştur", en: "Create Account" },
   "smc.bosPeak": { tr: "BOS Kırılım Zirvesi", en: "BOS Break Peak" },
 
+  // Veri kaynağı rozeti
+  "ds.live": { tr: "Canlı veri", en: "Live data" },
+  "ds.bars": { tr: "Barlar", en: "Bars" },
+  "ds.checking": { tr: "Veri kaynağı kontrol ediliyor...", en: "Checking data source..." },
+  "ds.alpacaActive": { tr: "Canlı: Alpaca", en: "Live: Alpaca" },
+  "ds.yfFallback": { tr: "Canlı: yfinance (yedek)", en: "Live: yfinance (fallback)" },
+
   // Ortak terimler (sayfalarda kademeli kullanım için)
   "common.loading": { tr: "Yükleniyor...", en: "Loading..." },
   "common.error": { tr: "Hata", en: "Error" },

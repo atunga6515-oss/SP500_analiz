@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { addTickerToWatchlist } from "@/lib/watchlist";
 import { useT, useTv } from "@/lib/i18n";
 import { useSymbolNames } from "@/lib/symbolNames";
+import DataSourceBadge from "@/components/DataSourceBadge";
 
 export default function ScreenerPage() {
     const router = useRouter();
@@ -238,7 +239,10 @@ export default function ScreenerPage() {
         <div className="flex w-full h-full p-6 flex-col bg-[var(--color-b-bg)] text-[var(--color-b-text)] overflow-y-auto">
             <div className="flex justify-between items-end mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">{t("sc.title")}</h1>
+                    <div className="flex items-center gap-3 mb-2">
+                        <h1 className="text-3xl font-bold text-white">{t("sc.title")}</h1>
+                        <DataSourceBadge />
+                    </div>
                     <p className="text-[var(--color-b-muted)] mb-4">{t("sc.subtitle")}</p>
 
                     <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded text-sm text-blue-200 mb-6 max-w-4xl">

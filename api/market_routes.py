@@ -131,6 +131,29 @@ def fetch_macro_calendar(current_user: str = Depends(get_current_user)):
     
     return {"data": events}
 
+@router.get("/data-source")
+def data_source(current_user: str = Depends(get_current_user)):
+    """
+    Aktif veri kaynaklarını döndürür (UI rozeti için).
+    - bars_source: geçmiş OHLCV+hacim her zaman yfinance
+    - live_source: anlık fiyat -> alpaca (çalışıyorsa) yoksa yfinance yedek
+    """
+    try:
+        import alpaca_client
+        h = alpaca_client.health()
+        live = "alpaca" if (h.get("configured") and h.get("ok")) else "yfinance"
+        return {
+            "live_source": live,
+            "bars_source": "yfinance",
+            "alpaca_configured": h.get("configured", False),
+            "alpaca_ok": h.get("ok", False),
+            "feed": h.get("feed", "iex"),
+        }
+    except Exception as e:
+        return {"live_source": "yfinance", "bars_source": "yfinance",
+                "alpaca_configured": False, "alpaca_ok": False, "feed": "iex", "error": str(e)}
+
+
 @router.get("/symbols")
 def get_symbols(current_user: str = Depends(get_current_user)):
     """
